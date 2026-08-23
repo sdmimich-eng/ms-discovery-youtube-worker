@@ -37,4 +37,4 @@ jobs:
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
-        run: python worker/render_and_upload.py
+        run: python worker/render_and_upload_v2.py
