@@ -1,0 +1,40 @@
+name: MS Discovery YouTube Worker
+
+on:
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install free renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg espeak-ng fonts-dejavu-core
+          python -m pip install --disable-pip-version-check -r worker/requirements.txt
+      - name: Cache free German neural voice
+        id: piper-cache
+        uses: actions/cache@v4
+        with:
+          path: worker/voices
+          key: piper-de-DE-thorsten-medium-v1
+      - name: Download free German neural voice
+        if: steps.piper-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p worker/voices
+          python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
+      - name: Render and upload one queued video (max two per day from Discovery)
+        env:
+          MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
+          MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
+        run: python worker/render_and_upload.py
