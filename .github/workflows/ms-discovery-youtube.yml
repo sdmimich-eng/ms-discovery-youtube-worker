@@ -7,7 +7,7 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    - cron: '7,37 * * * *'
+    - cron: '6,26,46 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
         run: |
           DELAY=$(python3 - <<'PY'
           import secrets
-          print(secrets.randbelow(721) + 30)
+          print(secrets.randbelow(481) + 20)
           PY
           )
           echo "Job vorhanden. Zufällige Verzögerung: ${DELAY}s"
