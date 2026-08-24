@@ -2,7 +2,7 @@ name: MS Discovery YouTube Worker
 
 on:
   schedule:
-    - cron: '17 */2 * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -14,26 +14,42 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+
+      - name: Lightweight work check
+        id: preflight
+        env:
+          MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
+          MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
+        run: python3 worker/preflight.py
+
       - uses: actions/setup-python@v5
+        if: steps.preflight.outputs.has_work == 'true'
         with:
           python-version: '3.12'
+
       - name: Install free renderer
+        if: steps.preflight.outputs.has_work == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg espeak-ng fonts-dejavu-core
           python -m pip install --disable-pip-version-check -r worker/requirements.txt
+
       - name: Cache free German neural voice
+        if: steps.preflight.outputs.has_work == 'true'
         id: piper-cache
         uses: actions/cache@v4
         with:
           path: worker/voices
           key: piper-de-DE-thorsten-medium-v1
+
       - name: Download free German neural voice
-        if: steps.piper-cache.outputs.cache-hit != 'true'
+        if: steps.preflight.outputs.has_work == 'true' && steps.piper-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
+
       - name: Render dynamic video and upload (max three per day from Discovery)
+        if: steps.preflight.outputs.has_work == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
