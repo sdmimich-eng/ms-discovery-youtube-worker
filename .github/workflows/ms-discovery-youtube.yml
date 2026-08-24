@@ -37,4 +37,4 @@ jobs:
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
-        run: python worker/run_v2_filtered.py
+        run: python worker/run_v3.py
