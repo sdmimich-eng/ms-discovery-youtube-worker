@@ -7,16 +7,20 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    - cron: '17 */2 * * *'
+    - cron: '7,37 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ms-discovery-youtube-worker
+  cancel-in-progress: false
+
 jobs:
   render-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +31,17 @@ jobs:
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
         run: python3 worker/claim_job.py
+
+      - name: Randomize publication timing
+        if: steps.claim.outputs.has_work == 'true'
+        run: |
+          DELAY=$(python3 - <<'PY'
+          import secrets
+          print(secrets.randbelow(721) + 30)
+          PY
+          )
+          echo "Job vorhanden. Zufällige Verzögerung: ${DELAY}s"
+          sleep "$DELAY"
 
       - uses: actions/setup-python@v5
         if: steps.claim.outputs.has_work == 'true'
