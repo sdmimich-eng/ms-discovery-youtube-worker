@@ -33,8 +33,8 @@ jobs:
         run: |
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
-      - name: Render and upload one queued video (max two per day from Discovery)
+      - name: Render dynamic video and upload (max three per day from Discovery)
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
-        run: python worker/run_v3.py
+        run: python worker/run_v4_dynamic.py
