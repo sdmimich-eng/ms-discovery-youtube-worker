@@ -7,7 +7,7 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    - cron: '6,26,46 * * * *'
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -32,16 +32,20 @@ jobs:
           MSD_CLAIM_FILE: worker/claimed_job.json
         run: python3 worker/claim_job.py
 
-      - name: Randomize publication timing
-        if: steps.claim.outputs.has_work == 'true'
+      - name: Randomize optional publication timing
+        if: steps.claim.outputs.has_work == 'true' && steps.claim.outputs.urgent != 'true'
         run: |
           DELAY=$(python3 - <<'PY'
           import secrets
-          print(secrets.randbelow(481) + 20)
+          print(secrets.randbelow(361) + 20)
           PY
           )
-          echo "Job vorhanden. Zufällige Verzögerung: ${DELAY}s"
+          echo "Optionaler Job: zufällige Verzögerung ${DELAY}s"
           sleep "$DELAY"
+
+      - name: Mandatory daily minimum starts immediately
+        if: steps.claim.outputs.has_work == 'true' && steps.claim.outputs.urgent == 'true'
+        run: echo "Pflichtvideo für Tagesminimum – ohne künstliche Verzögerung starten."
 
       - uses: actions/setup-python@v5
         if: steps.claim.outputs.has_work == 'true'
