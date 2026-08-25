@@ -23,14 +23,14 @@ if not job_url or not secret:
 
 req = urllib.request.Request(job_url, headers={
     'X-MSD-Worker-Secret': secret,
-    'User-Agent': 'MS-Discovery-YouTube-Claim/1.0',
+    'User-Agent': 'MS-Discovery-YouTube-Claim/1.1',
 })
 try:
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with urllib.request.urlopen(req, timeout=45) as r:
         raw = r.read().decode('utf-8')
         data = json.loads(raw)
 except urllib.error.HTTPError as e:
-    body = e.read().decode('utf-8', errors='replace')[:1200]
+    body = e.read().decode('utf-8', errors='replace')[:1600]
     print(f'YouTube job endpoint HTTP {e.code}: {body}')
     sys.exit(3)
 except Exception as e:
@@ -40,6 +40,7 @@ except Exception as e:
 job = data.get('job') if isinstance(data, dict) else None
 if not job:
     emit('has_work', 'false')
+    emit('urgent', 'false')
     print('Kein YouTube-Job:', (data.get('message') if isinstance(data, dict) else '') or 'Queue leer')
     sys.exit(0)
 
@@ -47,4 +48,5 @@ claim_path.parent.mkdir(parents=True, exist_ok=True)
 claim_path.write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
 emit('has_work', 'true')
 emit('job_kind', 'remake' if job.get('remake') else 'normal')
-print('YouTube-Job geholt:', 'REMAKE' if job.get('remake') else 'NORMAL', '-', job.get('title', '')[:120])
+emit('urgent', 'true' if job.get('urgent') else 'false')
+print('YouTube-Job geholt:', 'URGENT' if job.get('urgent') else 'NORMAL', '-', job.get('title', '')[:120])
