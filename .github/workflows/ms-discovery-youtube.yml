@@ -73,10 +73,10 @@ jobs:
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
 
-      - name: Render dynamic V4 video and upload
+      - name: Render dynamic V6 video and upload
         if: steps.claim.outputs.has_work == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
-        run: python worker/run_v4_claimed.py
+        run: python worker/run_v6_claimed.py
