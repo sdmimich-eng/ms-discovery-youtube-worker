@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 import render_and_upload_v2 as worker
-import run_v5_dynamic as dynamic
+import run_v6_dynamic as dynamic
 
 claim_path = Path(os.environ.get('MSD_CLAIM_FILE') or 'worker/claimed_job.json')
 if not claim_path.exists():
