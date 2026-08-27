@@ -1,0 +1,81 @@
+name: MS Discovery YouTube Fallback
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ms-discovery-youtube-fallback.yml'
+  schedule:
+    - cron: '8,28,48 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ms-discovery-youtube-worker
+  cancel-in-progress: false
+
+jobs:
+  render-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Claim exactly one Discovery job
+        id: claim
+        env:
+          MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
+          MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
+          MSD_CLAIM_FILE: worker/claimed_job.json
+        run: python3 worker/claim_job.py
+
+      - name: Randomize optional publication timing
+        if: steps.claim.outputs.has_work == 'true' && steps.claim.outputs.urgent != 'true'
+        run: |
+          DELAY=$(python3 - <<'PY'
+          import secrets
+          print(secrets.randbelow(361) + 20)
+          PY
+          )
+          echo "Optionaler Job: zufällige Verzögerung ${DELAY}s"
+          sleep "$DELAY"
+
+      - name: Mandatory daily minimum starts immediately
+        if: steps.claim.outputs.has_work == 'true' && steps.claim.outputs.urgent == 'true'
+        run: echo "Pflichtvideo für Tagesminimum – ohne künstliche Verzögerung starten."
+
+      - uses: actions/setup-python@v5
+        if: steps.claim.outputs.has_work == 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Install free renderer
+        if: steps.claim.outputs.has_work == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg espeak-ng fonts-dejavu-core
+          python -m pip install --disable-pip-version-check -r worker/requirements.txt
+
+      - name: Cache free German neural voice
+        if: steps.claim.outputs.has_work == 'true'
+        id: piper-cache
+        uses: actions/cache@v4
+        with:
+          path: worker/voices
+          key: piper-de-DE-thorsten-medium-v1
+
+      - name: Download free German neural voice
+        if: steps.claim.outputs.has_work == 'true' && steps.piper-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p worker/voices
+          python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
+
+      - name: Render adaptive V7 video and upload
+        if: steps.claim.outputs.has_work == 'true'
+        env:
+          MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
+          MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
+          MSD_CLAIM_FILE: worker/claimed_job.json
+        run: python worker/run_v7_claimed.py
