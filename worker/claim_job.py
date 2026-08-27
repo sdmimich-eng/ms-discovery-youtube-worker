@@ -23,10 +23,12 @@ if not job_url or not secret:
 
 req = urllib.request.Request(job_url, headers={
     'X-MSD-Worker-Secret': secret,
-    'User-Agent': 'MS-Discovery-YouTube-Claim/1.1',
+    'User-Agent': 'MS-Discovery-YouTube-Claim/1.2',
 })
 try:
-    with urllib.request.urlopen(req, timeout=45) as r:
+    # Discovery muss ggf. mehrere Quellen rotierend pruefen. Etwas Luft fuer langsame
+    # WordPress-Quellen geben; die 5.4.5-Zentrale begrenzt den Scan zusaetzlich hart.
+    with urllib.request.urlopen(req, timeout=75) as r:
         raw = r.read().decode('utf-8')
         data = json.loads(raw)
 except urllib.error.HTTPError as e:
