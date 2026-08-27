@@ -6,7 +6,9 @@ on:
     paths:
       - '.github/workflows/ms-discovery-youtube-fallback.yml'
   schedule:
-    - cron: '8,28,48 * * * *'
+    # Redundantes Sicherheitsnetz: einmal pro Stunde. Der Hauptworker prueft alle
+    # 20 Minuten; beide verwenden denselben leichten Preflight und dieselbe Sperre.
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
