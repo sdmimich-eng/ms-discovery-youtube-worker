@@ -17,24 +17,42 @@ def emit(key, value):
             f.write(f'{key}={value}\n')
 
 
+def fetch_json(url, timeout, label):
+    req = urllib.request.Request(url, headers={
+        'X-MSD-Worker-Secret': secret,
+        'User-Agent': 'MS-Discovery-YouTube-Worker/1.3',
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')[:1600]
+        print(f'{label} HTTP {e.code}: {body}')
+        raise
+
+
 if not job_url or not secret:
     print('MSD_WORKER_URL/MSD_WORKER_SECRET fehlen.')
     sys.exit(2)
 
-req = urllib.request.Request(job_url, headers={
-    'X-MSD-Worker-Secret': secret,
-    'User-Agent': 'MS-Discovery-YouTube-Claim/1.2',
-})
+# 5.5.0: erst den sehr kleinen /youtube-work-Preflight fragen. Dadurch werden bei
+# erreichtem Tagesziel oder Zufallsabstand keine Quellseiten gescannt und GitHub
+# installiert auch keinen Renderer. Der Preflight dient zugleich als Heartbeat.
+work_url = job_url.replace('/youtube-job', '/youtube-work')
 try:
-    # Discovery muss ggf. mehrere Quellen rotierend pruefen. Etwas Luft fuer langsame
-    # WordPress-Quellen geben; die 5.4.5-Zentrale begrenzt den Scan zusaetzlich hart.
-    with urllib.request.urlopen(req, timeout=75) as r:
-        raw = r.read().decode('utf-8')
-        data = json.loads(raw)
-except urllib.error.HTTPError as e:
-    body = e.read().decode('utf-8', errors='replace')[:1600]
-    print(f'YouTube job endpoint HTTP {e.code}: {body}')
+    status = fetch_json(work_url, 20, 'YouTube preflight')
+except Exception as e:
+    print('YouTube preflight failed:', repr(e))
     sys.exit(3)
+
+if isinstance(status, dict) and not status.get('has_work'):
+    emit('has_work', 'false')
+    emit('urgent', 'false')
+    print('Kein YouTube-Job nötig:', status.get('reason') or status.get('message') or 'kein freier Slot')
+    sys.exit(0)
+
+try:
+    data = fetch_json(job_url, 65, 'YouTube job endpoint')
 except Exception as e:
     print('YouTube job endpoint failed:', repr(e))
     sys.exit(4)
