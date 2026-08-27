@@ -7,7 +7,8 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+    # 10-Minuten-Takt reicht fuer 3-6 Videos/Tag und reaktiviert den Scheduler sauber.
+    - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
 
 permissions:
