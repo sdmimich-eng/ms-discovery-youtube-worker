@@ -7,9 +7,9 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    # Der leichte /youtube-work-Preflight reicht alle 20 Minuten. Erst wenn wirklich
-    # ein Video faellig ist, werden Quellen gelesen und der Renderer gestartet.
-    - cron: '7,27,47 * * * *'
+    # Einfacher Viertelstunden-Takt. Der sehr kleine /youtube-work-Preflight entscheidet,
+    # ob ueberhaupt ein Video faellig ist; nur dann startet der Renderer.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
