@@ -98,6 +98,10 @@ def domain_label(job):
         return 'ms-programs.de'
 
 
+def is_tiktok_clean(job):
+    return bool(job.get('tiktok_clean')) or clean(job.get('destination')).lower().startswith('tiktok')
+
+
 def make_story(job, source, out):
     with Image.open(source) as src:
         bg = cover(src).filter(ImageFilter.GaussianBlur(16))
@@ -124,6 +128,7 @@ def make_story(job, source, out):
 
 
 def make_scene(job, source, kind):
+    clean_tiktok = is_tiktok_clean(job)
     with Image.open(source) as src:
         bg = cover(src).filter(ImageFilter.GaussianBlur(14))
         bg = ImageEnhance.Brightness(bg).enhance(0.48)
@@ -149,15 +154,24 @@ def make_scene(job, source, kind):
             draw.text((105, y), line, font=body_font, fill=(245, 248, 252, 255))
             y += 57
     else:
-        draw.text((105, 1280), 'Mehr erfahren', font=title_font, fill='white')
-        dom = domain_label(job)
-        y = 1400
-        for line in wrap(draw, dom, font(50, True), 870, 3):
-            draw.text((105, y), line, font=font(50, True), fill=(139, 215, 255, 255))
-            y += 68
-        draw.text((105, 1640), '#MSPrograms', font=body_font, fill='white')
-    draw.rounded_rectangle((70, 65, 330, 125), radius=24, fill=(6, 21, 38, 205))
-    draw.text((95, 79), 'MS-PROGRAMS', font=brand_font, fill='white')
+        if clean_tiktok:
+            draw.text((105, 1280), 'Das Wichtigste', font=title_font, fill='white')
+            y = 1395
+            desc = clean(job.get('description')) or clean(job.get('title'))
+            for line in wrap(draw, desc, body_font, 870, 5):
+                draw.text((105, y), line, font=body_font, fill=(245, 248, 252, 255))
+                y += 58
+        else:
+            draw.text((105, 1280), 'Mehr erfahren', font=title_font, fill='white')
+            dom = domain_label(job)
+            y = 1400
+            for line in wrap(draw, dom, font(50, True), 870, 3):
+                draw.text((105, y), line, font=font(50, True), fill=(139, 215, 255, 255))
+                y += 68
+            draw.text((105, 1640), '#MSPrograms', font=body_font, fill='white')
+    if not clean_tiktok:
+        draw.rounded_rectangle((70, 65, 330, 125), radius=24, fill=(6, 21, 38, 205))
+        draw.text((95, 79), 'MS-PROGRAMS', font=brand_font, fill='white')
     return canvas
 
 
