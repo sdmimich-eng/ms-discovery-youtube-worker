@@ -20,7 +20,7 @@ def emit(key, value):
 def fetch_json(url, timeout, label):
     req = urllib.request.Request(url, headers={
         'X-MSD-Worker-Secret': secret,
-        'User-Agent': 'MS-Discovery-YouTube-Worker/1.3',
+        'User-Agent': 'MS-Discovery-Media-Worker/1.4',
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -31,42 +31,80 @@ def fetch_json(url, timeout, label):
         raise
 
 
+def safe_fetch(url, timeout, label):
+    try:
+        return fetch_json(url, timeout, label)
+    except Exception as e:
+        print(label, 'nicht erreichbar:', repr(e))
+        return {}
+
+
 if not job_url or not secret:
     print('MSD_WORKER_URL/MSD_WORKER_SECRET fehlen.')
     sys.exit(2)
 
-# 5.5.0: erst den sehr kleinen /youtube-work-Preflight fragen. Dadurch werden bei
-# erreichtem Tagesziel oder Zufallsabstand keine Quellseiten gescannt und GitHub
-# installiert auch keinen Renderer. Der Preflight dient zugleich als Heartbeat.
-work_url = job_url.replace('/youtube-job', '/youtube-work')
-try:
-    status = fetch_json(work_url, 20, 'YouTube preflight')
-except Exception as e:
-    print('YouTube preflight failed:', repr(e))
-    sys.exit(3)
+base_job_url = job_url
+youtube_work_url = job_url.replace('/youtube-job', '/youtube-work')
+social_work_url = job_url.replace('/youtube-job', '/social-media-work')
+social_job_url = job_url.replace('/youtube-job', '/social-media-job')
 
-if isinstance(status, dict) and not status.get('has_work'):
+youtube_status = safe_fetch(youtube_work_url, 20, 'YouTube preflight')
+social_status = safe_fetch(social_work_url, 20, 'Social preflight')
+
+youtube_has = bool(isinstance(youtube_status, dict) and youtube_status.get('has_work'))
+youtube_urgent = bool(isinstance(youtube_status, dict) and youtube_status.get('urgent'))
+social_has = bool(isinstance(social_status, dict) and social_status.get('has_work'))
+social_urgent = bool(isinstance(social_status, dict) and social_status.get('urgent'))
+
+# Dringende YouTube-Pflichtvideos bleiben unangetastet. Danach bekommen faellige
+# Stories/Reels einen freien Worker-Slot; erst danach optionales YouTube.
+kind = ''
+claim_url = ''
+if youtube_has and youtube_urgent:
+    kind = 'youtube'
+    claim_url = base_job_url
+elif social_has:
+    kind = 'social'
+    claim_url = social_job_url
+elif youtube_has:
+    kind = 'youtube'
+    claim_url = base_job_url
+else:
     emit('has_work', 'false')
     emit('urgent', 'false')
-    print('Kein YouTube-Job nötig:', status.get('reason') or status.get('message') or 'kein freier Slot')
+    emit('is_youtube', 'false')
+    emit('is_social', 'false')
+    print('Kein Media-Job nötig:', (social_status.get('reason') if isinstance(social_status, dict) else '') or (youtube_status.get('reason') if isinstance(youtube_status, dict) else '') or 'kein freier Slot')
     sys.exit(0)
 
 try:
-    data = fetch_json(job_url, 65, 'YouTube job endpoint')
+    data = fetch_json(claim_url, 65, f'{kind} job endpoint')
 except Exception as e:
-    print('YouTube job endpoint failed:', repr(e))
+    print(f'{kind} job endpoint failed:', repr(e))
     sys.exit(4)
 
 job = data.get('job') if isinstance(data, dict) else None
 if not job:
     emit('has_work', 'false')
     emit('urgent', 'false')
-    print('Kein YouTube-Job:', (data.get('message') if isinstance(data, dict) else '') or 'Queue leer')
+    emit('is_youtube', 'false')
+    emit('is_social', 'false')
+    print('Kein Job:', (data.get('message') if isinstance(data, dict) else '') or 'Queue leer')
     sys.exit(0)
 
 claim_path.parent.mkdir(parents=True, exist_ok=True)
 claim_path.write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
 emit('has_work', 'true')
-emit('job_kind', 'remake' if job.get('remake') else 'normal')
-emit('urgent', 'true' if job.get('urgent') else 'false')
-print('YouTube-Job geholt:', 'URGENT' if job.get('urgent') else 'NORMAL', '-', job.get('title', '')[:120])
+if kind == 'social':
+    fmt = str(job.get('format') or 'story').lower()
+    emit('job_kind', f'social_{fmt}')
+    emit('is_youtube', 'false')
+    emit('is_social', 'true')
+    emit('urgent', 'true' if social_urgent else 'false')
+    print('Instagram-Job geholt:', fmt.upper(), '-', str(job.get('title') or '')[:120])
+else:
+    emit('job_kind', 'youtube')
+    emit('is_youtube', 'true')
+    emit('is_social', 'false')
+    emit('urgent', 'true' if job.get('urgent') else 'false')
+    print('YouTube-Job geholt:', 'URGENT' if job.get('urgent') else 'NORMAL', '-', str(job.get('title') or '')[:120])
