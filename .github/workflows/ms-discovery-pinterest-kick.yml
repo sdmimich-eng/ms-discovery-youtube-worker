@@ -31,6 +31,7 @@ jobs:
           python3 - <<'PY'
           import json
           import os
+          import urllib.error
           import urllib.request
 
           job_url = (os.environ.get('MSD_WORKER_URL') or '').strip()
@@ -43,7 +44,16 @@ jobs:
               'X-MSD-Worker-Secret': secret,
               'User-Agent': 'MS-Discovery-Pinterest-Wakeup/1.0',
           })
-          with urllib.request.urlopen(req, timeout=40) as r:
-              data = json.loads(r.read().decode('utf-8'))
-          print(json.dumps(data, ensure_ascii=False))
+          try:
+              with urllib.request.urlopen(req, timeout=40) as r:
+                  data = json.loads(r.read().decode('utf-8'))
+              print(json.dumps(data, ensure_ascii=False))
+          except urllib.error.HTTPError as e:
+              # Waerend des Rollouts kann auf ms-programs.de noch eine alte Plugin-Version
+              # ohne /pinterest-kick aktiv sein. Das ist kein Worker-Fehler und soll keine
+              # GitHub-Fehlermail erzeugen. Nach Installation von 5.5.9 greift der naechste Tick.
+              if e.code == 404:
+                  print('Pinterest-Wakeup-Endpunkt noch nicht installiert; spaeter erneut.')
+              else:
+                  raise
           PY
