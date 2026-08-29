@@ -1,6 +1,10 @@
 name: MS Discovery Pinterest Wakeup
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ms-discovery-pinterest-kick.yml'
   schedule:
     # Externe Ausfallsicherung fuer WP-Cron: vier sehr kleine Checks pro Stunde.
     # Der Server macht nur dann echte Pinterest-Arbeit, wenn ein Lauf wirklich faellig ist.
