@@ -175,7 +175,6 @@ def synth_music(path, duration, seed_text):
     buf = bytearray()
     for i in range(n):
         t = i / sr
-        beat = t * 2.0
         bar = int(t / (duration / 4.0)) % 4
         root = roots[bar]
         triad = [root, root * 1.259921, root * 1.498307]
@@ -211,7 +210,7 @@ def make_reel(job, source, out, tmp):
     frames = [d1 * 30, d2 * 30, d3 * 30]
     for i, fr in enumerate(frames):
         zoom = "min(zoom+0.00045,1.055)" if i != 1 else "min(zoom+0.00030,1.045)"
-        filters.append(f'[{i}:v]scale=1080:1920,zoompan=z={zoom}:d={fr}:s=1080x1920:fps=30,setsar=1[v{i}]')
+        filters.append(f"[{i}:v]scale=1080:1920,zoompan=z='{zoom}':d={fr}:s=1080x1920:fps=30,setsar=1[v{i}]")
     filters.append('[v0][v1][v2]concat=n=3:v=1:a=0[v]')
     cmd = [
         'ffmpeg', '-y',
