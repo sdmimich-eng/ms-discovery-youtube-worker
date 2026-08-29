@@ -1,4 +1,4 @@
-name: MS Discovery YouTube Worker
+name: MS Discovery Media Worker
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    # Einfacher Viertelstunden-Takt. Der sehr kleine /youtube-work-Preflight entscheidet,
-    # ob ueberhaupt ein Video faellig ist; nur dann startet der Renderer.
+    # Ein gemeinsamer 15-Minuten-Worker fuer YouTube sowie Instagram Story/Reel.
+    # Der kleine Preflight entscheidet, ob ueberhaupt gerendert wird.
     - cron: '*/15 * * * *'
   workflow_dispatch:
 
@@ -16,17 +16,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: ms-discovery-youtube-worker
+  group: ms-discovery-media-worker
   cancel-in-progress: false
 
 jobs:
-  render-and-upload:
+  render-and-publish:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
-      - name: Claim exactly one Discovery job
+      - name: Claim exactly one Discovery media job
         id: claim
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
@@ -39,15 +39,15 @@ jobs:
         run: |
           DELAY=$(python3 - <<'PY'
           import secrets
-          print(secrets.randbelow(361) + 20)
+          print(secrets.randbelow(241) + 20)
           PY
           )
-          echo "Optionaler Job: zufällige Verzögerung ${DELAY}s"
+          echo "Optionaler Media-Job: zufaellige Verzoegerung ${DELAY}s"
           sleep "$DELAY"
 
-      - name: Mandatory daily minimum starts immediately
+      - name: Urgent job starts immediately
         if: steps.claim.outputs.has_work == 'true' && steps.claim.outputs.urgent == 'true'
-        run: echo "Pflichtvideo für Tagesminimum – ohne künstliche Verzögerung starten."
+        run: echo "Dringender Media-Job – ohne kuenstliche Verzoegerung starten."
 
       - uses: actions/setup-python@v5
         if: steps.claim.outputs.has_work == 'true'
@@ -62,7 +62,7 @@ jobs:
           python -m pip install --disable-pip-version-check -r worker/requirements.txt
 
       - name: Cache free German neural voice
-        if: steps.claim.outputs.has_work == 'true'
+        if: steps.claim.outputs.is_youtube == 'true'
         id: piper-cache
         uses: actions/cache@v4
         with:
@@ -70,15 +70,23 @@ jobs:
           key: piper-de-DE-thorsten-medium-v1
 
       - name: Download free German neural voice
-        if: steps.claim.outputs.has_work == 'true' && steps.piper-cache.outputs.cache-hit != 'true'
+        if: steps.claim.outputs.is_youtube == 'true' && steps.piper-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
 
-      - name: Render V9 growth video and upload
-        if: steps.claim.outputs.has_work == 'true'
+      - name: Render V9 growth video and upload to YouTube
+        if: steps.claim.outputs.is_youtube == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
         run: python worker/run_v9_claimed.py
+
+      - name: Render Instagram Story or Reel and publish through Buffer
+        if: steps.claim.outputs.is_social == 'true'
+        env:
+          MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
+          MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
+          MSD_CLAIM_FILE: worker/claimed_job.json
+        run: python worker/social_media_worker.py
