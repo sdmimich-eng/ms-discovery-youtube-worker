@@ -17,6 +17,18 @@ def emit(key, value):
             f.write(f'{key}={value}\n')
 
 
+# Commits am Worker duerfen niemals echte Discovery-Jobs aus der Queue ziehen.
+# Echte Arbeit erfolgt nur ueber schedule/workflow_dispatch. Dadurch blockieren
+# Code-Updates keinen Story/Reel/TikTok-Review-Slot mehr.
+if (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push':
+    emit('has_work', 'false')
+    emit('urgent', 'false')
+    emit('is_youtube', 'false')
+    emit('is_social', 'false')
+    print('Push-Lauf: nur Code-Update, kein Media-Job wird beansprucht.')
+    sys.exit(0)
+
+
 def fetch_json(url, timeout, label):
     req = urllib.request.Request(url, headers={
         'X-MSD-Worker-Secret': secret,
