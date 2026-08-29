@@ -75,10 +75,10 @@ jobs:
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
 
-      - name: Render calmer V8 video and upload
+      - name: Render V9 growth video and upload
         if: steps.claim.outputs.has_work == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
-        run: python worker/run_v8_claimed.py
+        run: python worker/run_v9_claimed.py
