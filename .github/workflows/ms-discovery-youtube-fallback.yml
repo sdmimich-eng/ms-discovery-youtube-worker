@@ -5,10 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ms-discovery-youtube-fallback.yml'
-  schedule:
-    # Redundantes Sicherheitsnetz: einmal pro Stunde, bewusst versetzt zum
-    # 15-Minuten-Hauptworker. Beide verwenden denselben leichten Preflight und Lock.
-    - cron: '9 * * * *'
+  # 5.7.11: Kein stündlicher Doppel-Check mehr. Der gemeinsame 15-Minuten-Media-Worker
+  # ist das produktive Sicherheitsnetz; dieser Workflow bleibt nur fuer manuelle Diagnose.
   workflow_dispatch:
 
 permissions:
@@ -41,12 +39,12 @@ jobs:
           print(secrets.randbelow(361) + 20)
           PY
           )
-          echo "Optionaler Job: zufällige Verzögerung ${DELAY}s"
+          echo "Optionaler Job: zufaellige Verzoegerung ${DELAY}s"
           sleep "$DELAY"
 
       - name: Mandatory daily minimum starts immediately
         if: steps.claim.outputs.has_work == 'true' && steps.claim.outputs.urgent == 'true'
-        run: echo "Pflichtvideo für Tagesminimum – ohne künstliche Verzögerung starten."
+        run: echo "Pflichtvideo fuer Tagesminimum – ohne kuenstliche Verzoegerung starten."
 
       - uses: actions/setup-python@v5
         if: steps.claim.outputs.has_work == 'true'
