@@ -6,9 +6,9 @@ on:
     paths:
       - '.github/workflows/ms-discovery-pinterest-kick.yml'
   schedule:
-    # Externe Ausfallsicherung fuer WP-Cron: vier sehr kleine Checks pro Stunde.
-    # Der Server macht nur dann echte Pinterest-Arbeit, wenn ein Lauf wirklich faellig ist.
-    - cron: '5,20,35,50 * * * *'
+    # 5.7.11: Nur noch ein leiser externer Sicherheitscheck pro Stunde.
+    # WordPress taktet Pinterest selbst; GitHub ist lediglich das Ausfallsicherungsnetz.
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Wake Pinterest automation if due
+      - name: Best-effort Pinterest wakeup
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
@@ -37,23 +37,25 @@ jobs:
           job_url = (os.environ.get('MSD_WORKER_URL') or '').strip()
           secret = (os.environ.get('MSD_WORKER_SECRET') or '').strip()
           if not job_url or not secret:
-              raise SystemExit('MSD_WORKER_URL/MSD_WORKER_SECRET fehlen.')
+              print('Pinterest-Wakeup uebersprungen: Worker-URL oder Secret fehlt.')
+              raise SystemExit(0)
 
           url = job_url.replace('/youtube-job', '/pinterest-kick')
           req = urllib.request.Request(url, headers={
               'X-MSD-Worker-Secret': secret,
-              'User-Agent': 'MS-Discovery-Pinterest-Wakeup/1.0',
+              'User-Agent': 'MS-Discovery-Pinterest-Wakeup/1.1',
           })
           try:
-              with urllib.request.urlopen(req, timeout=40) as r:
-                  data = json.loads(r.read().decode('utf-8'))
-              print(json.dumps(data, ensure_ascii=False))
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  raw = r.read().decode('utf-8', errors='replace')
+                  try:
+                      data = json.loads(raw)
+                      print(json.dumps(data, ensure_ascii=False))
+                  except Exception:
+                      print(raw[:1200])
           except urllib.error.HTTPError as e:
-              # Waerend des Rollouts kann auf ms-programs.de noch eine alte Plugin-Version
-              # ohne /pinterest-kick aktiv sein. Das ist kein Worker-Fehler und soll keine
-              # GitHub-Fehlermail erzeugen. Nach Installation von 5.5.9 greift der naechste Tick.
-              if e.code == 404:
-                  print('Pinterest-Wakeup-Endpunkt noch nicht installiert; spaeter erneut.')
-              else:
-                  raise
+              body = e.read().decode('utf-8', errors='replace')[:800]
+              print(f'Pinterest-Wakeup HTTP {e.code}: {body} – kein Workflow-Fehler; naechster Stundenlauf versucht erneut.')
+          except Exception as e:
+              print(f'Pinterest-Wakeup derzeit nicht erreichbar: {e!r} – kein Workflow-Fehler; naechster Stundenlauf versucht erneut.')
           PY
