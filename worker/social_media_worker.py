@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 SECRET = (os.environ.get('MSD_WORKER_SECRET') or '').strip()
 CLAIM_FILE = Path(os.environ.get('MSD_CLAIM_FILE') or 'worker/claimed_job.json')
-HEAD = {'X-MSD-Worker-Secret': SECRET, 'User-Agent': 'MS-Discovery-Instagram-Worker/1.0'}
+HEAD = {'X-MSD-Worker-Secret': SECRET, 'User-Agent': 'MS-Discovery-Instagram-Worker/1.1'}
 W, H = 1080, 1920
 
 
@@ -103,75 +103,101 @@ def is_tiktok_clean(job):
 
 
 def make_story(job, source, out):
+    # 5.7.11: Ruhigere Story mit Instagram-Safe-Zones. Rendering bleibt komplett
+    # auf GitHub Actions; auf ms-programs.de entsteht dadurch keine Bild-/CPU-Last.
     with Image.open(source) as src:
-        bg = cover(src).filter(ImageFilter.GaussianBlur(16))
-        bg = ImageEnhance.Brightness(bg).enhance(0.52)
+        bg = cover(src).filter(ImageFilter.GaussianBlur(18))
+        bg = ImageEnhance.Brightness(bg).enhance(0.48)
+        bg = ImageEnhance.Contrast(bg).enhance(1.08)
         canvas = bg.copy()
-        fg = contain(src, 980, 1070)
+        fg = contain(src, 960, 940)
     fx = (W - fg.width) // 2
-    fy = 150
-    mask = rounded_mask(fg.size, 42)
-    canvas.paste(fg, (fx, fy), mask)
+    fy = 185
+    canvas.paste(fg, (fx, fy), rounded_mask(fg.size, 40))
+
     draw = ImageDraw.Draw(canvas, 'RGBA')
-    draw.rounded_rectangle((55, 1260, 1025, 1815), radius=46, fill=(8, 17, 31, 218))
-    title_font = font(58, True)
-    small_font = font(32, False)
-    brand_font = font(30, True)
-    y = 1320
-    for line in wrap(draw, job.get('title'), title_font, 875, 5):
+    brand_font = font(29, True)
+    kicker_font = font(31, True)
+    title_font = font(54, True)
+    body_font = font(32, False)
+    cta_font = font(34, True)
+    domain_font = font(29, False)
+
+    draw.rounded_rectangle((70, 70, 338, 132), radius=24, fill=(6, 21, 38, 210))
+    draw.text((94, 85), 'MS-PROGRAMS', font=brand_font, fill=(255, 255, 255, 255))
+
+    draw.rounded_rectangle((55, 1175, 1025, 1715), radius=46, fill=(7, 16, 29, 226))
+    draw.text((105, 1228), 'KURZ ERKLAERT', font=kicker_font, fill=(151, 219, 255, 255))
+    y = 1283
+    for line in wrap(draw, job.get('title'), title_font, 870, 4):
         draw.text((105, y), line, font=title_font, fill='white')
-        y += 76
-    draw.text((105, 1740), 'Mehr dazu: ' + domain_label(job), font=small_font, fill=(220, 235, 255, 255))
-    draw.rounded_rectangle((70, 65, 330, 125), radius=24, fill=(6, 21, 38, 205))
-    draw.text((95, 79), 'MS-PROGRAMS', font=brand_font, fill=(255, 255, 255, 255))
-    canvas.save(out, 'JPEG', quality=91, optimize=True)
+        y += 69
+
+    desc = clean(job.get('description'))
+    if desc and y < 1560:
+        y += 8
+        for line in wrap(draw, desc, body_font, 870, 2):
+            draw.text((105, y), line, font=body_font, fill=(237, 244, 251, 255))
+            y += 45
+
+    cta_y = 1605
+    draw.rounded_rectangle((100, cta_y, 980, cta_y + 72), radius=28, fill=(235, 244, 252, 245))
+    draw.text((135, cta_y + 15), 'Vollstaendigen Beitrag ansehen', font=cta_font, fill=(8, 28, 48, 255))
+    dom = domain_label(job)
+    draw.text((105, 1680), dom, font=domain_font, fill=(203, 225, 242, 255))
+    canvas.save(out, 'JPEG', quality=92, optimize=True)
 
 
 def make_scene(job, source, kind):
     clean_tiktok = is_tiktok_clean(job)
     with Image.open(source) as src:
-        bg = cover(src).filter(ImageFilter.GaussianBlur(14))
-        bg = ImageEnhance.Brightness(bg).enhance(0.48)
+        bg = cover(src).filter(ImageFilter.GaussianBlur(16))
+        bg = ImageEnhance.Brightness(bg).enhance(0.46)
+        bg = ImageEnhance.Contrast(bg).enhance(1.06)
         canvas = bg.copy()
-        fg = contain(src, 1000, 1040)
-    canvas.paste(fg, ((W - fg.width) // 2, 120), rounded_mask(fg.size, 34))
+        fg = contain(src, 980, 960)
+    canvas.paste(fg, ((W - fg.width) // 2, 150), rounded_mask(fg.size, 34))
     draw = ImageDraw.Draw(canvas, 'RGBA')
-    draw.rounded_rectangle((52, 1190, 1028, 1810), radius=44, fill=(7, 16, 29, 224))
-    title_font = font(55, True)
-    body_font = font(37, False)
+    draw.rounded_rectangle((52, 1165, 1028, 1740), radius=44, fill=(7, 16, 29, 229))
+    title_font = font(53, True)
+    body_font = font(36, False)
     brand_font = font(29, True)
+    kicker_font = font(30, True)
+
     if kind == 1:
-        y = 1260
+        draw.text((105, 1220), 'AUF EINEN BLICK', font=kicker_font, fill=(151, 219, 255, 255))
+        y = 1275
         for line in wrap(draw, job.get('title'), title_font, 870, 5):
             draw.text((105, y), line, font=title_font, fill='white')
-            y += 72
-        draw.text((105, 1740), 'Kurz erklärt', font=body_font, fill=(204, 229, 255, 255))
+            y += 68
     elif kind == 2:
-        draw.text((105, 1250), 'Darum geht es', font=title_font, fill='white')
-        y = 1340
+        draw.text((105, 1220), 'DARUM GEHT ES', font=kicker_font, fill=(151, 219, 255, 255))
+        y = 1280
         desc = clean(job.get('description')) or clean(job.get('title'))
         for line in wrap(draw, desc, body_font, 870, 6):
             draw.text((105, y), line, font=body_font, fill=(245, 248, 252, 255))
-            y += 57
+            y += 55
     else:
         if clean_tiktok:
-            draw.text((105, 1280), 'Das Wichtigste', font=title_font, fill='white')
-            y = 1395
+            draw.text((105, 1220), 'DAS WICHTIGSTE', font=kicker_font, fill=(151, 219, 255, 255))
+            y = 1285
             desc = clean(job.get('description')) or clean(job.get('title'))
             for line in wrap(draw, desc, body_font, 870, 5):
                 draw.text((105, y), line, font=body_font, fill=(245, 248, 252, 255))
-                y += 58
+                y += 56
         else:
-            draw.text((105, 1280), 'Mehr erfahren', font=title_font, fill='white')
+            draw.text((105, 1220), 'MEHR DETAILS', font=kicker_font, fill=(151, 219, 255, 255))
+            draw.text((105, 1285), 'Vollstaendigen Beitrag ansehen', font=font(47, True), fill='white')
             dom = domain_label(job)
-            y = 1400
-            for line in wrap(draw, dom, font(50, True), 870, 3):
-                draw.text((105, y), line, font=font(50, True), fill=(139, 215, 255, 255))
-                y += 68
-            draw.text((105, 1640), '#MSPrograms', font=body_font, fill='white')
+            y = 1380
+            for line in wrap(draw, dom, font(44, True), 870, 2):
+                draw.text((105, y), line, font=font(44, True), fill=(170, 224, 255, 255))
+                y += 60
+            draw.text((105, 1585), 'Alle Schritte, Tipps und Hintergruende', font=body_font, fill=(239, 245, 251, 255))
+
     if not clean_tiktok:
-        draw.rounded_rectangle((70, 65, 330, 125), radius=24, fill=(6, 21, 38, 205))
-        draw.text((95, 79), 'MS-PROGRAMS', font=brand_font, fill='white')
+        draw.rounded_rectangle((70, 70, 338, 132), radius=24, fill=(6, 21, 38, 210))
+        draw.text((94, 85), 'MS-PROGRAMS', font=brand_font, fill='white')
     return canvas
 
 
@@ -189,6 +215,7 @@ def synth_music(path, duration, seed_text):
     buf = bytearray()
     for i in range(n):
         t = i / sr
+        beat = t * 2.0
         bar = int(t / (duration / 4.0)) % 4
         root = roots[bar]
         triad = [root, root * 1.259921, root * 1.498307]
