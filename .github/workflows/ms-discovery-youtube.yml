@@ -7,9 +7,9 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    # Ein gemeinsamer 15-Minuten-Worker fuer YouTube sowie Instagram Story/Reel.
-    # Der kleine Preflight entscheidet, ob ueberhaupt gerendert wird.
-    - cron: '*/15 * * * *'
+    # Weiter vier Checks pro Stunde, aber bewusst versetzt zum WP-Hauptslot (:05)
+    # und zum Pinterest-Wakeup (:17), damit die Systeme nicht gleichzeitig anlaufen.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -75,13 +75,13 @@ jobs:
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
 
-      - name: Render V9 growth video and upload to YouTube
+      - name: Render V10 growth video and upload to YouTube
         if: steps.claim.outputs.is_youtube == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
-        run: python worker/run_v9_claimed.py
+        run: python worker/run_v10_claimed.py
 
       - name: Render Instagram Story or Reel and publish through Buffer
         if: steps.claim.outputs.is_social == 'true'
