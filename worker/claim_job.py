@@ -17,9 +17,8 @@ def emit(key, value):
             f.write(f'{key}={value}\n')
 
 
-# Commits am Worker duerfen niemals echte Discovery-Jobs aus der Queue ziehen.
-# Echte Arbeit erfolgt nur ueber schedule/workflow_dispatch. Dadurch blockieren
-# Code-Updates keinen Story/Reel/TikTok-Review-Slot mehr.
+# 5.7.11: Ein Push aktualisiert nur Worker-Code. Er darf keinen echten Media-Job
+# aus der WordPress-Queue ziehen und damit einen spaeteren Scheduler-Slot blockieren.
 if (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push':
     emit('has_work', 'false')
     emit('urgent', 'false')
@@ -92,8 +91,14 @@ else:
 try:
     data = fetch_json(claim_url, 65, f'{kind} job endpoint')
 except Exception as e:
-    print(f'{kind} job endpoint failed:', repr(e))
-    sys.exit(4)
+    # 5.7.12: Ein kurzer WordPress-/Netzwerk-Aussetzer ist kein fehlgeschlagener
+    # Media-Job. Der naechste Scheduler-Lauf versucht es erneut; GitHub bleibt gruen.
+    emit('has_work', 'false')
+    emit('urgent', 'false')
+    emit('is_youtube', 'false')
+    emit('is_social', 'false')
+    print(f'{kind} job endpoint temporaer nicht erreichbar:', repr(e), '- naechster Lauf versucht erneut.')
+    sys.exit(0)
 
 job = data.get('job') if isinstance(data, dict) else None
 if not job:
