@@ -75,13 +75,13 @@ jobs:
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
 
-      - name: Render V10 growth video and upload to YouTube
+      - name: Render V11 semantic video and upload to YouTube
         if: steps.claim.outputs.is_youtube == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
-        run: python worker/run_v10_claimed.py
+        run: python worker/run_v11_claimed.py
 
       - name: Render Instagram Story or Reel and publish through Buffer
         if: steps.claim.outputs.is_social == 'true'
