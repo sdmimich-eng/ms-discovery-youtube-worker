@@ -89,4 +89,4 @@ jobs:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
           MSD_WORKER_SECRET: ${{ secrets.MSD_WORKER_SECRET }}
           MSD_CLAIM_FILE: worker/claimed_job.json
-        run: python worker/social_media_worker.py
+        run: python worker/social_media_worker_v2.py
