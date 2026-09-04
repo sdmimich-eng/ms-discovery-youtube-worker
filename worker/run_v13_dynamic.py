@@ -145,21 +145,169 @@ def upload_caption_track(video_id, token, srt_text):
         return ''
 
 
+
+_SEO_DOMAIN_HASHTAGS = {
+    'win-tipps.de': ['Windows', 'Windows11', 'PC', 'Technik'],
+    'fahrzeug-hilfe.de': ['Auto', 'KFZ', 'Fahrzeug', 'Autotipps'],
+    'wassollichheutekochen.de': ['Kochen', 'Rezepte', 'Rezeptideen', 'Kochideen'],
+    'gartenpapst.de': ['Garten', 'Gartentipps', 'Pflanzen', 'Gartenpflege'],
+    'drucker-tipps.de': ['Drucker', 'Druckerhilfe', 'Scanner', 'Technik'],
+    'router-tipps.de': ['Router', 'WLAN', 'Netzwerk', 'Internet'],
+    'app-fix.de': ['Apps', 'Smartphone', 'Android', 'AppTipps'],
+    'ebike-hilfe.de': ['EBike', 'Fahrrad', 'EBikeTipps', 'Technik'],
+    'nashilfe.de': ['NAS', 'Speicher', 'Festplatte', 'Technik'],
+    'server-preis.de': ['Server', 'Hosting', 'Webhosting', 'Technik'],
+    'kastenwagentipps.de': ['Camper', 'Wohnmobil', 'Camping', 'CamperTipps'],
+    'pv-tipps.de': ['Photovoltaik', 'Solar', 'PVAnlage', 'Energie'],
+    'entsorgungshelfer.de': ['Entsorgen', 'Recycling', 'Abfall', 'Umwelt'],
+    'zahnersatz-hilfe.de': ['Zahnersatz', 'Zaehne', 'Gesundheit', 'Ratgeber'],
+    'spielanleitungen.de': ['Spielanleitung', 'Brettspiele', 'Spielregeln', 'Spiele'],
+}
+
+_SEO_TOPIC_RULES = [
+    (r'\b(cpu|prozessor|uebertakt|übertakt|overclock|bios|uefi)\w*', ['CPU', 'Prozessor', 'Overclocking', 'BIOS', 'UEFI'], ['CPU zurücksetzen', 'CPU Übertaktung', 'Overclocking rückgängig machen', 'BIOS Einstellungen', 'UEFI Einstellungen']),
+    (r'\b(windows\s*11|windows|registry|druckerfreigabe)\b', ['Windows', 'Windows11', 'PC', 'WindowsTipps'], ['Windows 11', 'Windows Hilfe', 'Windows Einstellungen', 'PC Tipps']),
+    (r'\b(drucker|scanner|druckerfehler|fehlercode)\w*', ['Drucker', 'Druckerhilfe', 'Druckerfehler', 'Scanner'], ['Drucker Fehler', 'Drucker Hilfe', 'Fehlercode lösen']),
+    (r'\b(router|wlan|wifi|netzwerk|internet)\w*', ['Router', 'WLAN', 'Netzwerk', 'Internet'], ['Router Hilfe', 'WLAN Probleme', 'Netzwerk Tipps']),
+    (r'\b(auto|fahrzeug|motor|obd|allrad|reifen|bremse|subaru|forester)\w*', ['Auto', 'KFZ', 'Autotipps', 'Fahrzeug'], ['Auto Hilfe', 'KFZ Tipps', 'Fahrzeug Ratgeber']),
+    (r'\b(rezept|kochen|feta|dip|pasta|kartoffel|blumenkohl|salat|ofen|kueche|küche)\w*', ['Kochen', 'Rezepte', 'Rezeptideen', 'Kochideen'], ['Rezept', 'schnelle Rezepte', 'Kochideen', 'Essen']),
+    (r'\b(garten|pflanze|blume|insekt|wildblume|rasen|hecke)\w*', ['Garten', 'Gartentipps', 'Pflanzen', 'Gartenpflege'], ['Garten Tipps', 'Pflanzen Tipps', 'Gartenpflege']),
+    (r'\b(e-?bike|fahrrad|akku|shimano|bosch)\w*', ['EBike', 'Fahrrad', 'EBikeTipps'], ['E-Bike Hilfe', 'E-Bike Tipps', 'Fahrrad Technik']),
+    (r'\b(nas|festplatte|speicher|synology|qnap)\w*', ['NAS', 'Festplatte', 'Speicher', 'Datenspeicher'], ['NAS Hilfe', 'Festplatte prüfen', 'Speicher Tipps']),
+    (r'\b(server|hosting|joomla|wordpress)\w*', ['Server', 'Hosting', 'Webhosting', 'Technik'], ['Server Tipps', 'Hosting Hilfe', 'Webserver']),
+    (r'\b(app|android|iphone|smartphone)\w*', ['Apps', 'Smartphone', 'Android', 'AppTipps'], ['App Hilfe', 'Smartphone Tipps', 'Android Hilfe']),
+    (r'\b(solaranlage|photovoltaik|pv-anlage|wechselrichter)\w*', ['Photovoltaik', 'Solar', 'PVAnlage', 'Energie'], ['Photovoltaik Tipps', 'PV Anlage', 'Solar Hilfe']),
+    (r'\b(zahn|zahnersatz|prothese|implantat)\w*', ['Zahnersatz', 'Zaehne', 'Zahntipps'], ['Zahnersatz Ratgeber', 'Zahnprothese', 'Zahn Hilfe']),
+    (r'\b(camper|wohnmobil|kastenwagen|camping)\w*', ['Camper', 'Wohnmobil', 'Camping', 'CamperTipps'], ['Camper Tipps', 'Wohnmobil Hilfe', 'Camping Ratgeber']),
+    (r'\b(entsorg|recycl|abfall|muell|müll)\w*', ['Entsorgen', 'Recycling', 'Abfall', 'Umwelt'], ['richtig entsorgen', 'Recycling Tipps', 'Abfall entsorgen']),
+]
+
+_SEO_STOPWORDS = {
+    'aber','alle','alles','auch','auf','aus','bei','bin','das','dass','dem','den','der','des','die','dies','diese',
+    'einer','einem','einen','eine','ein','fuer','für','geht','ich','ist','kann','kannst','machen','man','mehr','mit',
+    'nach','nicht','noch','oder','richtig','setzen','sich','sind','so','und','vom','von','was','wie','wird','werden',
+    'welche','welcher','welches','zur','zum','zurueck','zurück'
+}
+
+
+def _job_domain(job):
+    domain = _clean(job.get('domain', '')).casefold().replace('www.', '')
+    if domain:
+        return domain
+    url = _clean(job.get('article_url', ''))
+    m = re.match(r'^https?://([^/]+)', url, re.I)
+    return (m.group(1).casefold().replace('www.', '') if m else '')
+
+
+def _add_unique(target, values, limit=99):
+    seen = {str(x).casefold() for x in target}
+    for value in values:
+        value = _clean(value)
+        if not value or value.casefold() in seen:
+            continue
+        target.append(value)
+        seen.add(value.casefold())
+        if len(target) >= limit:
+            break
+    return target
+
+
+def _significant_title_tokens(title, limit=4):
+    out = []
+    for raw in re.findall(r'[A-Za-zÄÖÜäöüß0-9][A-Za-zÄÖÜäöüß0-9+-]{2,}', _clean(title)):
+        low = raw.casefold().strip('+-')
+        if low in _SEO_STOPWORDS:
+            continue
+        token = re.sub(r'[^A-Za-zÄÖÜäöüß0-9]', '', raw)
+        if not token:
+            continue
+        if len(token) < 4 and not token.isupper():
+            continue
+        if token.casefold() not in {x.casefold() for x in out}:
+            out.append(token[:28])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def build_youtube_hashtags(job):
+    """8-12 relevant visible hashtags; topic-specific first, never a generic hashtag dump."""
+    title = _clean(job.get('title', ''))
+    description = _clean(job.get('description', ''))
+    haystack = f'{title} {description}'.casefold()
+    domain = _job_domain(job)
+    tags = []
+
+    for pattern, hashtags, _search_tags in _SEO_TOPIC_RULES:
+        if re.search(pattern, haystack, re.I):
+            _add_unique(tags, hashtags, 12)
+
+    _add_unique(tags, _significant_title_tokens(title, 3), 12)
+    _add_unique(tags, _SEO_DOMAIN_HASHTAGS.get(domain, []), 12)
+    _add_unique(tags, ['Ratgeber', 'Tipps', 'MSRatgeber'], 12)
+
+    cleaned = []
+    for tag in tags:
+        token = re.sub(r'[^A-Za-zÄÖÜäöüß0-9_]', '', tag)
+        if len(token) >= 2:
+            cleaned.append('#' + token[:40])
+    return cleaned[:12]
+
+
+def build_youtube_search_tags(job):
+    """Broaden the normal YouTube tag metadata without keyword stuffing."""
+    title = _clean(job.get('title', ''))
+    description = _clean(job.get('description', ''))
+    haystack = f'{title} {description}'.casefold()
+    domain = _job_domain(job)
+    tags = []
+
+    _add_unique(tags, job.get('tags') or [], 30)
+    if title:
+        _add_unique(tags, [title[:60]], 30)
+
+    for pattern, hashtags, search_tags in _SEO_TOPIC_RULES:
+        if re.search(pattern, haystack, re.I):
+            _add_unique(tags, search_tags, 30)
+            _add_unique(tags, hashtags, 30)
+
+    _add_unique(tags, _SEO_DOMAIN_HASHTAGS.get(domain, []), 30)
+    _add_unique(tags, _significant_title_tokens(title, 6), 30)
+    _add_unique(tags, ['MS Ratgeber', 'Ratgeber deutsch', 'Tipps und Hilfe'], 30)
+    return tags
+
+
+def build_youtube_description(job):
+    description = v9._description_for_upload(job)
+    kept = []
+    for line in description.splitlines():
+        stripped = line.strip()
+        # Replace old tiny hashtag-only lines such as "#Technik #Ratgeber".
+        if stripped and all(part.startswith('#') for part in stripped.split()):
+            continue
+        kept.append(line)
+    description = '\n'.join(kept).strip()
+    hashtags = build_youtube_hashtags(job)
+    if hashtags:
+        description = (description + '\n\n' + ' '.join(hashtags)).strip()
+    return description[:5000]
+
+
 def upload_youtube_v13(video, job):
     """V9 uploader + German audio language + exact manual captions."""
     token = job['youtube_access_token']
-    tags = [_clean(x)[:60] for x in (job.get('tags') or []) if _clean(x)]
+    tags = [_clean(x)[:60] for x in build_youtube_search_tags(job) if _clean(x)]
     compact_tags = []
     used = 0
     for tag in tags:
-        if used + len(tag) + 1 > 420:
+        if used + len(tag) + 1 > 450:
             break
         compact_tags.append(tag)
         used += len(tag) + 1
 
     snippet = {
         'title': _clean(job.get('title', ''))[:100],
-        'description': v9._description_for_upload(job),
+        'description': build_youtube_description(job),
         'categoryId': str(job.get('youtube_category_id') or '26'),
         'defaultLanguage': 'de',
         'defaultAudioLanguage': 'de',
@@ -222,7 +370,7 @@ def upload_youtube_v13(video, job):
 
 
 def complete_v13(url, job_id, ok, **extra):
-    extra['renderer'] = 'v13-captions'
+    extra['renderer'] = 'v13-captions-seo'
     return _ORIGINAL_COMPLETE(url, job_id, ok, **extra)
 
 
