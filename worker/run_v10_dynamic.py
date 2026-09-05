@@ -70,12 +70,12 @@ def _statement_score(sentence):
         return -999
     score = 0
     n = len(s)
-    if 60 <= n <= 190:
-        score += 20
-    elif 42 <= n <= 235:
-        score += 10
-    elif n > 280:
-        score -= 25
+    if 55 <= n <= 165:
+        score += 24
+    elif 42 <= n <= 195:
+        score += 11
+    elif n > 220:
+        score -= 28
     if _WEAK_START.search(s):
         score -= 45
     if re.search(r'\b(?:sollt|kannst|muss|prüf|kontroll|hilft|vermeid|wichtig|risiko|ursache|grund|fehler|problem)\w*\b', s, re.I):
@@ -90,7 +90,7 @@ def best_statement(text):
     ranked = sorted(enumerate(units), key=lambda item: (-_statement_score(item[1]), item[0]))
     # Prefer a reasonably compact complete sentence if one exists.
     for _, sentence in ranked:
-        if len(sentence) <= 235:
+        if len(sentence) <= 190:
             return sentence
     return ranked[0][1]
 
@@ -114,9 +114,15 @@ def core_chunks_v10(text, target=5):
     if not units:
         return [_clean(text)] if _clean(text) else ['']
 
-    strong = [u for u in units if not _WEAK_START.search(u) and len(u) <= 250]
+    strong = [u for u in units if not _WEAK_START.search(u) and len(u) <= 215]
     pool = strong if len(strong) >= 4 else units
-    wanted = 5 if len(pool) >= 8 else min(4, len(pool))
+    # Slightly more visual variety, but never turn the video into frantic micro-cards.
+    if len(pool) >= 10:
+        wanted = 6
+    elif len(pool) >= 7:
+        wanted = 5
+    else:
+        wanted = min(4, len(pool))
     wanted = max(1, wanted)
 
     picks = []
