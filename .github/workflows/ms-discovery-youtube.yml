@@ -26,6 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate worker source before claiming a job
+        run: python3 -m compileall -q worker
+
       - name: Claim exactly one Discovery media job
         id: claim
         env:
@@ -75,7 +78,7 @@ jobs:
           mkdir -p worker/voices
           python -m piper.download_voices de_DE-thorsten-medium --data-dir worker/voices
 
-      - name: Render V12 subtitle-safe video and upload to YouTube
+      - name: Render V13 quality video and upload to YouTube
         if: steps.claim.outputs.is_youtube == 'true'
         env:
           MSD_WORKER_URL: ${{ secrets.MSD_WORKER_URL }}
