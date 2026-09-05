@@ -435,6 +435,33 @@ def upload_caption_track(video_id, token, srt_text):
 
 
 
+_YOUTUBE_DOMAIN_CATEGORIES = {
+    'win-tipps.de': '28',
+    'drucker-tipps.de': '28',
+    'router-tipps.de': '28',
+    'app-fix.de': '28',
+    'nashilfe.de': '28',
+    'server-preis.de': '28',
+    'pv-tipps.de': '28',
+    'ebike-hilfe.de': '28',
+    'fahrzeug-hilfe.de': '2',
+    'kastenwagentipps.de': '2',
+    'wassollichheutekochen.de': '26',
+    'gartenpapst.de': '26',
+    'zahnersatz-hilfe.de': '27',
+    'entsorgungshelfer.de': '27',
+    'spielanleitungen.de': '20',
+}
+
+
+def youtube_category_for_job(job):
+    domain = _job_domain(job)
+    mapped = _YOUTUBE_DOMAIN_CATEGORIES.get(domain)
+    if mapped:
+        return mapped
+    return str(job.get('youtube_category_id') or '26')
+
+
 _SEO_DOMAIN_HASHTAGS = {
     'win-tipps.de': ['Windows', 'Windows11', 'PC', 'Technik'],
     'fahrzeug-hilfe.de': ['Auto', 'KFZ', 'Fahrzeug', 'Autotipps'],
@@ -597,7 +624,7 @@ def upload_youtube_v13(video, job):
     snippet = {
         'title': _clean(job.get('title', ''))[:100],
         'description': build_youtube_description(job),
-        'categoryId': str(job.get('youtube_category_id') or '26'),
+        'categoryId': youtube_category_for_job(job),
         'defaultLanguage': 'de',
         'defaultAudioLanguage': 'de',
     }
