@@ -50,6 +50,31 @@ def _canvas():
     return Image.new('RGBA', (W, H), (0, 0, 0, 0))
 
 
+def _blue_gradient_panel(im, box, radius=38, alpha=215):
+    """Blue -> deep-navy panel used by the live YouTube overlays."""
+    x0, y0, x1, y1 = [int(v) for v in box]
+    w, h = max(1, x1 - x0), max(1, y1 - y0)
+    grad = Image.new('RGBA', (w, 1), (0, 0, 0, 0))
+    px = grad.load()
+    left = (28, 124, 226, alpha)
+    mid = (13, 70, 157, alpha)
+    right = (4, 18, 54, alpha)
+    for x in range(w):
+        t = x / max(1, w - 1)
+        if t < 0.55:
+            u = t / 0.55
+            a, b = left, mid
+        else:
+            u = (t - 0.55) / 0.45
+            a, b = mid, right
+        px[x, 0] = tuple(int(a[i] + (b[i] - a[i]) * u) for i in range(4))
+    grad = grad.resize((w, h))
+    mask = Image.new('L', (w, h), 0)
+    md = ImageDraw.Draw(mask)
+    md.rounded_rectangle((0, 0, w - 1, h - 1), radius=radius, fill=255)
+    im.paste(grad, (x0, y0), mask)
+
+
 def safe_intro_overlay(title, domain, out):
     """Keep the lower 300px free for YouTube captions/player UI."""
     im = _canvas()
@@ -57,7 +82,7 @@ def safe_intro_overlay(title, domain, out):
     cat = v5.category_label(domain)
 
     box = (65, 70, 1080, 720)
-    d.rounded_rectangle(box, radius=42, fill=(4, 10, 22, 218))
+    _blue_gradient_panel(im, box, radius=42, alpha=224)
     d.rounded_rectangle((65, 70, 88, 720), radius=10, fill=(42, 207, 246, 255))
     d.rounded_rectangle((132, 125, 550, 195), radius=20, fill=(42, 207, 246, 248))
     cfont, clines = v7.strict_fit(d, cat, 350, 1, 31, 23, True)
@@ -102,7 +127,7 @@ def safe_content_overlay(title, heading, pts, domain, idx, total, out, compact=F
         box = (965, 85, 1850, 710)
         tx = 1030
 
-    d.rounded_rectangle(box, radius=38, fill=(4, 10, 22, 204))
+    _blue_gradient_panel(im, box, radius=38, alpha=211)
     d.rounded_rectangle((box[0], box[1], box[0] + 20, box[3]), radius=10, fill=(42, 207, 246, 250))
     d.rounded_rectangle((tx, 135, tx + 360, 195), radius=18, fill=(42, 207, 246, 246))
     cfont, clines = v7.strict_fit(d, cat, 305, 1, 27, 22, True)
@@ -136,7 +161,7 @@ def safe_minimal_overlay(text, domain, idx, total, out, variant=0):
     else:
         box = (85, 80, 670, 220)
         tx = 135
-    d.rounded_rectangle(box, radius=28, fill=(4, 10, 22, 190))
+    _blue_gradient_panel(im, box, radius=28, alpha=198)
     d.rounded_rectangle((box[0], box[1], box[0] + 18, box[3]), radius=9, fill=(42, 207, 246, 245))
     d.text((tx, 110), cat, font=v5.font(27, True), fill=(115, 225, 255, 255))
     d.text((tx, 158), 'MS Ratgeber', font=v5.font(24, False), fill=(233, 241, 248, 255))
@@ -152,7 +177,7 @@ def safe_cta_overlay(article_url, domain, out):
     next_url = _clean(v9._CURRENT_JOB.get('next_video_url', ''))
 
     box = (135, 70, 1785, 715)
-    d.rounded_rectangle(box, radius=48, fill=(4, 10, 22, 226))
+    _blue_gradient_panel(im, box, radius=48, alpha=231)
     d.rounded_rectangle((135, 70, 160, 715), radius=10, fill=(42, 207, 246, 255))
 
     if next_title and next_url:
