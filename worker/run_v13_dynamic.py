@@ -1,6 +1,10 @@
 import json
 import os
 import re
+import shutil
+import subprocess
+import wave
+from pathlib import Path
 
 import render_and_upload_v2 as worker
 import run_v5_dynamic as v5
@@ -11,17 +15,184 @@ import run_v12_dynamic as v12
 _NARRATION = ''
 _ORIGINAL_BUILD = None
 _ORIGINAL_COMPLETE = None
+_ORIGINAL_SYNTH = None
 
 
 def _clean(value):
     return v6.clean_text(value)
 
 
+
+_BAD_SENTENCE_START = re.compile(
+    r'^(?:und|oder|aber|sowie|beziehungsweise|bzw\.?|wobei|während|waehrend|obwohl)\b',
+    re.I,
+)
+
+_TTS_REPLACEMENTS = [
+    (r'\bz\.\s*B\.\b', 'zum Beispiel'),
+    (r'\bbzw\.\b', 'beziehungsweise'),
+    (r'\bca\.\b', 'etwa'),
+    (r'\bu\.\s*a\.\b', 'unter anderem'),
+    (r'\bCPU\b', 'C P U'),
+    (r'\bUEFI\b', 'U E F I'),
+    (r'\bBIOS\b', 'Bios'),
+    (r'\bWLAN\b', 'W-LAN'),
+    (r'\bUSB\b', 'U S B'),
+    (r'\bSSD\b', 'S S D'),
+    (r'\bHDD\b', 'H D D'),
+    (r'\bNAS\b', 'N A S'),
+    (r'\bOBD\s*2\b', 'O B D zwei'),
+    (r'\bWildbienen\b', 'Wild-Bienen'),
+    (r'\bLehmstelle\b', 'Lehm-Stelle'),
+    (r'\bBaumaterial\b', 'Bau-Material'),
+    (r'\bBrotaufstrich\b', 'Brot-Aufstrich'),
+    (r'\bOfengemüse\b', 'Ofen-Gemüse'),
+    (r'\bChilischärfe\b', 'Chili-Schärfe'),
+    (r'\bDruckerfreigabe\b', 'Drucker-Freigabe'),
+    (r'\bWerkseinstellungen\b', 'Werks-Einstellungen'),
+    (r'\bNamensfehler\b', 'Namens-Fehler'),
+    (r'\bFehlercode\b', 'Fehler-Code'),
+    (r'\bAllradantrieb\b', 'Allrad-Antrieb'),
+]
+
+
+def _sentence_fingerprint(sentence):
+    words = re.findall(r'[a-zäöüß0-9]{4,}', _clean(sentence).casefold())
+    return ' '.join(words[:18])
+
+
+def polish_narration(text):
+    """Light editorial pass: preserve facts, remove run-ons/duplicates/fragments."""
+    t = _clean(text)
+    if not t:
+        return ''
+
+    t = re.sub(r'\s+([,.;:!?])', r'\1', t)
+    t = re.sub(r'([,.;:!?])(?=[A-Za-zÄÖÜäöüß])', r'\1 ', t)
+    t = re.sub(r'(?<=\w)-\s+(?=\w)', '-', t)
+    t = re.sub(r'\.{4,}', '…', t)
+
+    raw_sentences = [
+        _clean(x).strip(' -–—•')
+        for x in re.split(r'(?<=[.!?…])\s+', t)
+        if _clean(x)
+    ]
+    out = []
+    seen = set()
+    for sentence in raw_sentences:
+        words = sentence.split()
+        if len(words) < 4 and not sentence.endswith('?'):
+            continue
+        if _BAD_SENTENCE_START.search(sentence) and len(words) < 10:
+            continue
+        fp = _sentence_fingerprint(sentence)
+        if fp and fp in seen:
+            continue
+        if fp:
+            seen.add(fp)
+        if sentence[-1:] not in '.!?…':
+            sentence += '.'
+        out.append(sentence)
+
+    polished = _clean(' '.join(out))
+    return polished or t
+
+
 def build_narration_capture(title, text):
     global _NARRATION
-    narration = _ORIGINAL_BUILD(title, text)
-    _NARRATION = _clean(narration)
+    narration = polish_narration(_ORIGINAL_BUILD(title, text))
+    _NARRATION = narration
     return narration
+
+
+def speech_pronunciation_text(text):
+    """Speech-only pronunciation hints. Captions keep the original spelling."""
+    t = polish_narration(text)
+    for pattern, replacement in _TTS_REPLACEMENTS:
+        t = re.sub(pattern, replacement, t, flags=re.I)
+    # A dash is visually elegant, but a short spoken pause is clearer.
+    t = re.sub(r'\s+[–—]\s+', '. ', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+
+def quality_tts_chunks(text, max_chars=500):
+    """Short sentence groups reduce Piper slurring words together."""
+    sentences = [
+        _clean(x)
+        for x in re.split(r'(?<=[.!?])\s+', speech_pronunciation_text(text))
+        if _clean(x)
+    ]
+    out = []
+    cur = ''
+    for sentence in sentences:
+        test = (cur + ' ' + sentence).strip()
+        if cur and len(test) > max_chars:
+            out.append(cur)
+            cur = sentence
+        else:
+            cur = test
+    if cur:
+        out.append(cur)
+    return out or [speech_pronunciation_text(text)]
+
+
+def synthesize_voice_quality(text, out_wav, td):
+    """Slightly slower, calmer German Piper voice with tiny phrase-group pauses."""
+    model = Path(__file__).resolve().parent / 'voices' / 'de_DE-thorsten-medium.onnx'
+    try:
+        from piper import PiperVoice, SynthesisConfig
+        if not model.exists():
+            raise FileNotFoundError(str(model))
+
+        voice = PiperVoice.load(str(model))
+        # A touch slower and less noisy than the old profile. This makes long
+        # German compounds and technical terms noticeably easier to understand.
+        syn = SynthesisConfig(
+            length_scale=1.10,
+            noise_scale=0.54,
+            noise_w_scale=0.70,
+            normalize_audio=True,
+        )
+        parts = []
+        for i, chunk in enumerate(quality_tts_chunks(text)):
+            wavp = Path(td) / f'voice_quality_{i:02d}.wav'
+            with wave.open(str(wavp), 'wb') as wf:
+                voice.synthesize_wav(chunk, wf, syn_config=syn)
+            parts.append(wavp)
+
+        if len(parts) == 1:
+            shutil.copyfile(parts[0], out_wav)
+        else:
+            pause = Path(td) / 'voice_pause.wav'
+            with wave.open(str(parts[0]), 'rb') as rf:
+                channels = rf.getnchannels()
+                width = rf.getsampwidth()
+                rate = rf.getframerate()
+            with wave.open(str(pause), 'wb') as wf:
+                wf.setnchannels(channels)
+                wf.setsampwidth(width)
+                wf.setframerate(rate)
+                silence_frames = int(rate * 0.13)
+                wf.writeframes(b'\x00' * silence_frames * channels * width)
+
+            listing = Path(td) / 'voice_quality_concat.txt'
+            lines = []
+            for i, part in enumerate(parts):
+                lines.append("file '%s'\n" % str(part).replace("'", "'\\''"))
+                if i < len(parts) - 1:
+                    lines.append("file '%s'\n" % str(pause).replace("'", "'\\''"))
+            listing.write_text(''.join(lines), encoding='utf-8')
+            subprocess.run(
+                ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing),
+                 '-c:a', 'pcm_s16le', str(out_wav)],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        print('TTS quality profile: Piper de_DE-thorsten-medium, slower/clearer')
+        return
+    except Exception as exc:
+        print('Quality TTS fallback:', repr(exc))
+        return _ORIGINAL_SYNTH(speech_pronunciation_text(text), out_wav, td)
 
 
 def _caption_units(text, max_words=10):
@@ -370,16 +541,18 @@ def upload_youtube_v13(video, job):
 
 
 def complete_v13(url, job_id, ok, **extra):
-    extra['renderer'] = 'v13-captions-seo'
+    extra['renderer'] = 'v13-quality-captions-seo'
     return _ORIGINAL_COMPLETE(url, job_id, ok, **extra)
 
 
 def install_v13():
-    global _ORIGINAL_BUILD, _ORIGINAL_COMPLETE
+    global _ORIGINAL_BUILD, _ORIGINAL_COMPLETE, _ORIGINAL_SYNTH
     v12.install_v12()
     _ORIGINAL_BUILD = v5.build_narration
     _ORIGINAL_COMPLETE = worker.complete
+    _ORIGINAL_SYNTH = worker.synthesize_voice
     v5.build_narration = build_narration_capture
+    worker.synthesize_voice = synthesize_voice_quality
     v6.upload_youtube_v6 = upload_youtube_v13
     worker.complete = complete_v13
 
