@@ -98,10 +98,128 @@ def polish_narration(text):
     return polished or t
 
 
+_NARRATION_ACTION = re.compile(
+    r'\b(?:musst|muss|sollt|sollte|kannst|kann|prüf|pruef|kontroll|achte|öffn|oeffn|'
+    r'setz|stell|entfern|vermeid|reinige|starte|schalt|melde|hilft|wichtig|ursache|'
+    r'problem|fehler|risiko|lösung|loesung|schritt)\w*\b',
+    re.I,
+)
+_NARRATION_WEAK = re.compile(
+    r'^(?:hier|dort|dabei|dadurch|damit|deshalb|daher|dies(?:e|er|es|en|em)?|'
+    r'auch|zudem|außerdem|ausserdem|dann)\b',
+    re.I,
+)
+
+
+def _title_terms(title):
+    stop = {
+        'aber','alle','auch','auf','aus','bei','das','dass','dem','den','der','des','die','ein','eine','einen',
+        'einer','einem','für','fuer','ich','im','in','ist','kann','man','mit','nicht','oder','sich','so','und',
+        'von','vom','was','wie','wird','werden','zur','zum'
+    }
+    return {
+        w for w in re.findall(r'[a-zäöüß0-9-]{4,}', _clean(title).casefold())
+        if w not in stop
+    }
+
+
+def _narration_sentence_score(sentence, title_terms, index):
+    s = _clean(sentence)
+    words = set(re.findall(r'[a-zäöüß0-9-]{4,}', s.casefold()))
+    score = len(words & title_terms) * 6
+    if _NARRATION_ACTION.search(s):
+        score += 7
+    if re.search(r'\b\d+(?:[.,]\d+)?\b', s):
+        score += 2
+    if 55 <= len(s) <= 185:
+        score += 5
+    elif len(s) > 245:
+        score -= 6
+    if _NARRATION_WEAK.search(s):
+        score -= 3
+    if index < 5:
+        score += 2
+    return score
+
+
+def build_quality_narration(title, text):
+    """Turn article prose into a tighter spoken script instead of reading the page verbatim."""
+    title = _clean(title).strip()
+    body = polish_narration(text)
+    raw = [
+        _clean(x).strip(' -–—•')
+        for x in re.split(r'(?<=[.!?…])\s+', body)
+        if _clean(x)
+    ]
+
+    terms = _title_terms(title)
+    candidates = []
+    seen = set()
+    for i, sentence in enumerate(raw):
+        if len(sentence) < 38:
+            continue
+        if re.search(r'https?://|www\.', sentence, re.I):
+            continue
+        fp = _sentence_fingerprint(sentence)
+        if fp and fp in seen:
+            continue
+        if fp:
+            seen.add(fp)
+        if sentence[-1:] not in '.!?…':
+            sentence += '.'
+        candidates.append((i, _narration_sentence_score(sentence, terms, i), sentence))
+
+    if not candidates:
+        return polish_narration(_ORIGINAL_BUILD(title, text))
+
+    # The first spoken answer should be highly relevant, not merely the first paragraph.
+    first_pool = candidates[:min(10, len(candidates))]
+    first_i, _score, first = max(first_pool, key=lambda row: (row[1], -row[0]))
+
+    question = bool(re.match(
+        r'^(?:wie|warum|wieso|weshalb|was|welche|welcher|welches|wann|wo|kann|muss|soll|bin)\b',
+        title, re.I,
+    ))
+    domain = _clean(v9._CURRENT_JOB.get('domain', '')).casefold()
+    if domain == 'wassollichheutekochen.de':
+        intro = f'{title.rstrip(".!?")}. Das Wichtigste zuerst: {first}'
+    elif question:
+        intro = f'Die kurze Antwort zuerst: {first}'
+    else:
+        intro = f'{title.rstrip(".!?")}. Das Wichtigste zuerst: {first}'
+
+    # Select the most useful sentences, then restore their editorial order.
+    rest = [row for row in candidates if row[0] != first_i]
+    ranked = sorted(rest, key=lambda row: (-row[1], row[0]))
+    selected = []
+    chars = len(intro)
+    # Around 2.4-2.9 minutes with the clearer V13 voice instead of rigid ~3:20 videos.
+    budget = 2450
+    for row in ranked:
+        sentence = row[2]
+        if chars + len(sentence) + 1 > budget:
+            continue
+        selected.append(row)
+        chars += len(sentence) + 1
+        if len(selected) >= 11:
+            break
+    selected.sort(key=lambda row: row[0])
+
+    body_sentences = [row[2] for row in selected]
+    outro = 'Die vollständige Schritt-für-Schritt-Anleitung findest du direkt über den ersten Link in der Videobeschreibung.'
+    narration = polish_narration(' '.join([intro] + body_sentences + [outro]))
+
+    # Final hard gate: a script should have enough substance but no obvious malformed punctuation.
+    if len(narration) < 420 or re.search(r'\s[,.;:!?]', narration):
+        narration = polish_narration(_ORIGINAL_BUILD(title, text))
+    return narration
+
+
 def build_narration_capture(title, text):
     global _NARRATION
-    narration = polish_narration(_ORIGINAL_BUILD(title, text))
+    narration = build_quality_narration(title, text)
     _NARRATION = narration
+    print('Narration quality:', len(narration), 'chars,', len(re.split(r'(?<=[.!?])\\s+', narration)), 'sentences')
     return narration
 
 
@@ -116,7 +234,7 @@ def speech_pronunciation_text(text):
     return t
 
 
-def quality_tts_chunks(text, max_chars=500):
+def quality_tts_chunks(text, max_chars=420):
     """Short sentence groups reduce Piper slurring words together."""
     sentences = [
         _clean(x)
@@ -173,7 +291,7 @@ def synthesize_voice_quality(text, out_wav, td):
                 wf.setnchannels(channels)
                 wf.setsampwidth(width)
                 wf.setframerate(rate)
-                silence_frames = int(rate * 0.13)
+                silence_frames = int(rate * 0.16)
                 wf.writeframes(b'\x00' * silence_frames * channels * width)
 
             listing = Path(td) / 'voice_quality_concat.txt'
