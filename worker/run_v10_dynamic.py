@@ -17,6 +17,18 @@ _WEAK_START = re.compile(
 )
 
 
+_FRAGMENT_START = re.compile(
+    r'^(?:und|oder|aber|sowie|beziehungsweise|bzw\.?|wobei|während|waehrend|obwohl|welche|welcher|welches)\b',
+    re.I,
+)
+_SPEECHLIKE_VERB = re.compile(
+    r'\b(?:ist|sind|war|wird|werden|hat|haben|kann|können|koennen|muss|müssen|muessen|soll|sollte|'
+    r'prüf|pruef|öffn|oeffn|stell|setz|entfern|vermeid|hilft|brauch|entsteh|führ|fuehr|'
+    r'funktionier|meld|achte|gibt|lässt|laesst|start|schalt|reinig|verwend|nutz)\w*\b',
+    re.I,
+)
+
+
 def _clean(value):
     return v7.display_clean(value)
 
@@ -31,6 +43,12 @@ def standalone_units(text):
     for raw in re.split(r'(?<=[.!?])\s+', text):
         sentence = _clean(raw).strip(' -–—•')
         if len(sentence) < 42:
+            continue
+        # Obvious dependent-clause fragments should never be used as standalone cards.
+        if _FRAGMENT_START.search(sentence):
+            continue
+        # Longer card text should contain a real predicate/action instead of noun soup.
+        if len(sentence.split()) >= 8 and not _SPEECHLIKE_VERB.search(sentence):
             continue
         # Never split at commas/semicolons and never cut by character count.
         # Visible cards must contain complete statements rather than fragments.
