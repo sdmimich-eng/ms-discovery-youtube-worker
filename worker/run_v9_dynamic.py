@@ -125,6 +125,24 @@ def _fit_big(draw, text, max_width, max_lines, start=92, minimum=54):
     return v7.strict_fit(draw, text, max_width, max_lines, start, minimum, True)
 
 
+def _thumbnail_blue_gradient(im, box, left=(25, 137, 238, 238), mid=(11, 69, 158, 232), right=(3, 14, 45, 228)):
+    x0, y0, x1, y1 = [int(v) for v in box]
+    w, h = max(1, x1 - x0), max(1, y1 - y0)
+    grad = Image.new('RGBA', (w, 1), (0, 0, 0, 0))
+    px = grad.load()
+    for x in range(w):
+        t = x / max(1, w - 1)
+        if t < 0.55:
+            u = t / 0.55
+            a, b = left, mid
+        else:
+            u = (t - 0.55) / 0.45
+            a, b = mid, right
+        px[x, 0] = tuple(int(a[i] + (b[i] - a[i]) * u) for i in range(4))
+    grad = grad.resize((w, h))
+    im.paste(grad, (x0, y0), grad)
+
+
 def make_thumbnail_v9(bg_path, title, domain, out):
     try:
         bg = Image.open(bg_path).convert('RGB') if bg_path and Path(bg_path).exists() else Image.new('RGB', (TW, TH), (11, 24, 44))
@@ -141,9 +159,7 @@ def make_thumbnail_v9(bg_path, title, domain, out):
     cat = v5.category_label(domain)
 
     if variant == 0:
-        for x in range(0, 760, 4):
-            alpha = int(245 * (1 - x / 850))
-            d.rectangle((x, 0, x + 4, TH), fill=(2, 8, 18, max(38, alpha)))
+        _thumbnail_blue_gradient(bg, (0, 0, 790, TH))
         d.rounded_rectangle((42, 40, 520, 112), radius=20, fill=(42, 207, 246, 246))
         cfont, clines = v7.strict_fit(d, cat, 410, 1, 30, 23, True)
         d.text((72, 57), clines[0], font=cfont, fill=(3, 16, 30, 255))
@@ -154,7 +170,7 @@ def make_thumbnail_v9(bg_path, title, domain, out):
             d.text((50, y), line, font=tfont, fill='white')
             y += int(getattr(tfont, 'size', 72) * 1.08)
     else:
-        d.rectangle((0, 420, TW, TH), fill=(3, 9, 19, 226))
+        _thumbnail_blue_gradient(bg, (0, 420, TW, TH), left=(28, 146, 244, 238), mid=(13, 77, 174, 233), right=(3, 14, 45, 230))
         d.rounded_rectangle((42, 42, 470, 112), radius=20, fill=(42, 207, 246, 246))
         cfont, clines = v7.strict_fit(d, cat, 360, 1, 29, 22, True)
         d.text((70, 58), clines[0], font=cfont, fill=(3, 16, 30, 255))
