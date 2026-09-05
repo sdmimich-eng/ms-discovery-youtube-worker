@@ -402,7 +402,8 @@ def main():
             video = td / 'video.mp4'
             subprocess.run([
                 'ffmpeg', '-y', '-i', str(silent), '-i', str(td / 'voice.wav'),
-                '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '144k',
+                '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy',
+                '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-c:a', 'aac', '-b:a', '160k',
                 '-shortest', '-movflags', '+faststart', str(video),
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
