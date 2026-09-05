@@ -91,9 +91,16 @@ def paragraph_for_narration(text: str) -> str:
     # Many WordPress blocks omit a final full stop. Joining such blocks with a
     # blank space produced exactly the kind of strange word/sentence run-ons
     # viewers noticed. Preserve the editorial boundary explicitly.
-    if not re.search(r'[.!?…]    parts = re.split(r'(?<=[.!?])\s+', worker.clean_text(text))
-    kept = [p for p in parts if p and not is_boilerplate(p)]
-    return worker.clean_text(' '.join(kept))
+    if not re.search(r'[.!?…]$', t):
+        t += '.'
+    return t
+
+
+def filter_text(text: str) -> str:
+    text = normalize_source_text(text)
+    parts = re.split(r'(?<=[.!?…])\s+', text)
+    kept = [normalize_source_text(p) for p in parts if p and not is_boilerplate(p)]
+    return worker.clean_text(' '.join(p for p in kept if p))
 
 
 def image_metadata(im, src=''):
