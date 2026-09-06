@@ -75,78 +75,117 @@ def _blue_gradient_panel(im, box, radius=38, alpha=215):
     im.paste(grad, (x0, y0), mask)
 
 
+_COOKING_ACTION = re.compile(
+    r'\b(?:schäl|schael|schneid|würfel|wuerfel|hack|brat|röst|roest|dünst|duenst|koch|gar|'
+    r'back|vermisch|verrühr|verruehr|würz|wuerz|abschmeck|gib|geb|füge|fuege|hebe|lass|'
+    r'reduzier|servier|marinier|erhitz|schmor)\w*\b',
+    re.I,
+)
+_PRONOUN_START = re.compile(
+    r'^(?:sie|diese(?:r|s|n|m)?|dies|dabei|danach|dann|dadurch|damit|hier|dort)\b',
+    re.I,
+)
+
+
+def _is_cooking(domain):
+    return _clean(domain).casefold().replace('www.', '') == 'wassollichheutekochen.de'
+
+
+def _card_statement(pts, domain):
+    """Pick one concrete self-contained statement; never a generic editorial label."""
+    candidates = []
+    seen = set()
+    for p in pts or []:
+        for sentence in v11.v10.standalone_units(p):
+            sentence = _clean(sentence).strip()
+            key = sentence.casefold()
+            if not sentence or key in seen:
+                continue
+            seen.add(key)
+            score = v11.v10._statement_score(sentence)
+            n = len(sentence)
+            if 48 <= n <= 150:
+                score += 12
+            elif n > 190:
+                score -= 18
+            if _PRONOUN_START.search(sentence):
+                score -= 16
+            if _is_cooking(domain) and _COOKING_ACTION.search(sentence):
+                score += 24
+            if re.search(r'\b(?:prüf|pruef|kontroll|stell|setz|öffn|oeffn|entfern|vermeid|achte|'
+                         r'ursache|fehler|problem|risiko|hilft|sollt|musst|kannst)\w*\b', sentence, re.I):
+                score += 10
+            candidates.append((score, -len(candidates), sentence))
+
+    if candidates:
+        candidates.sort(reverse=True)
+        return candidates[0][2]
+    return 'Alle konkreten Schritte findest du im vollständigen Ratgeber.'
+
+
 def safe_intro_overlay(title, domain, out):
-    """Keep the lower 300px free for YouTube captions/player UI."""
+    """Compact, topic-specific intro; lower 360px stay free for captions/player UI."""
     im = _canvas()
     d = ImageDraw.Draw(im, 'RGBA')
     cat = v5.category_label(domain)
+    phrase = v11.semantic_thumbnail_phrase(title, domain) or _clean(title)
 
-    box = (65, 70, 1080, 720)
-    _blue_gradient_panel(im, box, radius=42, alpha=224)
-    d.rounded_rectangle((65, 70, 88, 720), radius=10, fill=(42, 207, 246, 255))
-    d.rounded_rectangle((132, 125, 550, 195), radius=20, fill=(42, 207, 246, 248))
-    cfont, clines = v7.strict_fit(d, cat, 350, 1, 31, 23, True)
-    d.text((160, 143), clines[0], font=cfont, fill=(3, 16, 30, 255))
+    box = (70, 70, 930, 575)
+    _blue_gradient_panel(im, box, radius=38, alpha=190)
+    d.rounded_rectangle((70, 70, 90, 575), radius=10, fill=(42, 207, 246, 245))
+    d.rounded_rectangle((125, 120, 505, 184), radius=18, fill=(42, 207, 246, 242))
+    cfont, clines = v7.strict_fit(d, cat, 320, 1, 28, 22, True)
+    d.text((151, 136), clines[0], font=cfont, fill=(3, 16, 30, 255))
 
-    tfont, lines = v7.strict_fit(d, _clean(title), 830, 5, 67, 38, True)
-    line_h = int(getattr(tfont, 'size', 58) * 1.14)
-    y = 255
+    tfont, lines = v7.strict_fit(d, phrase, 700, 4, 66, 39, True)
+    line_h = int(getattr(tfont, 'size', 56) * 1.12)
+    y = 240
     for line in lines:
-        d.text((138, y), line, font=tfont, fill='white')
+        d.text((130, y), line, font=tfont, fill='white')
         y += line_h
 
-    d.text((138, 635), 'Kurz erklärt · klar · direkt zum Beitrag', font=v5.font(27, False), fill=(225, 237, 246, 255))
-    d.text((138, 680), domain, font=v5.font(25, True), fill=(103, 221, 255, 255))
+    d.text((130, 515), domain, font=v5.font(24, True), fill=(132, 228, 255, 255))
     im.save(out)
 
 
 def safe_content_overlay(title, heading, pts, domain, idx, total, out, compact=False):
-    """Subtitle-safe content card: all important text stays in the upper 2/3."""
+    """Concrete card copy only: category + one useful statement, no generic filler heading."""
     if compact:
         return safe_minimal_overlay('', domain, idx, total, out, idx)
 
-    statement = ''
-    for p in pts or []:
-        units = v11.v10.standalone_units(p)
-        if units:
-            statement = v11.v10.best_statement(' '.join(units))
-            if statement:
-                break
-    if not statement:
-        statement = 'Die wichtigsten Schritte und Details findest du im vollständigen Ratgeber.'
+    statement = _card_statement(pts, domain).rstrip()
+    if statement[-1:] in '.!?':
+        statement = statement[:-1].rstrip()
 
-    heading = v11.v10.semantic_heading(statement, idx, total)
     im = _canvas()
     d = ImageDraw.Draw(im, 'RGBA')
     cat = v5.category_label(domain)
 
     if idx % 2:
-        box = (70, 85, 955, 710)
-        tx = 135
+        box = (75, 95, 850, 590)
+        tx = 132
     else:
-        box = (965, 85, 1850, 710)
-        tx = 1030
+        box = (1070, 95, 1845, 590)
+        tx = 1127
 
-    _blue_gradient_panel(im, box, radius=38, alpha=211)
-    d.rounded_rectangle((box[0], box[1], box[0] + 20, box[3]), radius=10, fill=(42, 207, 246, 250))
-    d.rounded_rectangle((tx, 135, tx + 360, 195), radius=18, fill=(42, 207, 246, 246))
-    cfont, clines = v7.strict_fit(d, cat, 305, 1, 27, 22, True)
-    d.text((tx + 26, 149), clines[0], font=cfont, fill=(4, 15, 28, 255))
-    d.text((box[2] - 65, 151), f'{idx}/{total}', font=v5.font(25, True), fill=(115, 224, 255, 255), anchor='ra')
+    _blue_gradient_panel(im, box, radius=34, alpha=185)
+    d.rounded_rectangle((box[0], box[1], box[0] + 18, box[3]), radius=9, fill=(42, 207, 246, 242))
+    d.rounded_rectangle((tx, 135, tx + 330, 193), radius=17, fill=(42, 207, 246, 240))
+    cfont, clines = v7.strict_fit(d, cat, 278, 1, 25, 21, True)
+    d.text((tx + 23, 148), clines[0], font=cfont, fill=(4, 15, 28, 255))
+    d.text((box[2] - 42, 150), f'{idx}/{total}', font=v5.font(23, True), fill=(145, 229, 255, 255), anchor='ra')
 
-    hfont, hlines = v7.strict_fit(d, heading, 700, 2, 50, 38, True)
-    y = 245
-    for line in hlines:
-        d.text((tx, y), line, font=hfont, fill='white')
-        y += int(getattr(hfont, 'size', 46) * 1.16)
+    # One concrete statement is easier to process than a generic heading plus paragraph.
+    start_size = 54 if len(statement) <= 105 else 48 if len(statement) <= 145 else 42
+    tfont, lines = v7.strict_fit(d, statement, 650, 4, start_size, 31, True)
+    line_h = int(getattr(tfont, 'size', 45) * 1.14)
+    total_h = len(lines) * line_h
+    y = max(235, 335 - total_h // 2)
+    for line in lines:
+        d.text((tx, y), line, font=tfont, fill=(247, 250, 253, 255))
+        y += line_h
 
-    y += 26
-    pfont, plines = v7.strict_fit(d, statement, 700, 5, 37, 27, False)
-    for line in plines:
-        d.text((tx, y), line, font=pfont, fill=(239, 245, 250, 255))
-        y += int(getattr(pfont, 'size', 33) * 1.27)
-
-    d.text((tx, 655), domain, font=v5.font(24, True), fill=(198, 217, 232, 255))
+    d.text((tx, 535), domain, font=v5.font(22, True), fill=(201, 222, 238, 255))
     im.save(out)
 
 
