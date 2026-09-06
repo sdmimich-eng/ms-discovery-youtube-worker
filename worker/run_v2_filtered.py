@@ -4,7 +4,7 @@ from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import render_and_upload_v2 as worker
 
@@ -178,6 +178,61 @@ def url_is_editorial_or_decorative(image_url):
     return bool(EDITORIAL_IMAGE_RE.search(value) or DECORATIVE_IMAGE_RE.search(value))
 
 
+
+_PERSON_VISUAL_RE = re.compile(
+    r'\b(person|people|woman|women|man|men|portrait|portraet|gesicht|face|smile|'
+    r'family|familie|team|staff|author|autor|redaktion|editor|speaker|presenter)\b',
+    re.I,
+)
+
+_TOPIC_IMAGE_HINTS = {
+    'win-tipps.de': ('windows','laptop','computer','pc','monitor','screen','desktop','registry','bios','uefi','hardware','keyboard'),
+    'drucker-tipps.de': ('drucker','printer','scanner','toner','tinte','paper','papier'),
+    'router-tipps.de': ('router','wlan','wifi','network','netzwerk','modem','lan'),
+    'nashilfe.de': ('nas','storage','speicher','festplatte','hdd','ssd','server'),
+    'server-preis.de': ('server','hosting','rack','datacenter','rechenzentrum'),
+    'app-fix.de': ('app','smartphone','android','iphone','phone','display','screen'),
+    'fahrzeug-hilfe.de': ('auto','car','vehicle','fahrzeug','motor','cockpit','battery','akku','charging','laden','obd'),
+    'kastenwagentipps.de': ('camper','wohnmobil','kastenwagen','camping'),
+    'wassollichheutekochen.de': ('essen','food','rezept','recipe','küche','kueche','kochen','pfanne','topf','salat','gemüse','gemuese'),
+    'gartenpapst.de': ('garten','garden','pflanze','plant','blume','flower','beet','rasen'),
+    'pv-tipps.de': ('solar','photovoltaik','pv','panel','wechselrichter'),
+    'ebike-hilfe.de': ('ebike','e-bike','fahrrad','bike','akku','motor'),
+    'entsorgungshelfer.de': ('entsorg','recycl','abfall','müll','muell','container'),
+}
+
+
+def image_topic_score(page_url, im=None, src=''):
+    """Prefer topic visuals; strongly demote people for technical domains."""
+    host = (urlparse(page_url).hostname or '').casefold().replace('www.', '')
+    bits = [src]
+    if im is not None:
+        bits.append(image_metadata(im, src))
+        bits.append(image_nearby_text(im))
+    text = worker.clean_text(' '.join(bits)).casefold()
+    score = 0
+
+    for hint in _TOPIC_IMAGE_HINTS.get(host, ()):
+        if hint in text:
+            score += 7
+
+    if _PERSON_VISUAL_RE.search(text):
+        score -= 18
+        if host in {
+            'win-tipps.de','drucker-tipps.de','router-tipps.de','nashilfe.de',
+            'server-preis.de','app-fix.de','pv-tipps.de'
+        }:
+            score -= 26
+
+    # Useful screenshots/hardware visuals are especially valuable for tech.
+    if host in {'win-tipps.de','drucker-tipps.de','router-tipps.de','nashilfe.de','server-preis.de','app-fix.de'}:
+        if re.search(r'\b(screen|screenshot|display|monitor|laptop|computer|pc|drucker|printer|router|server|nas|hardware)\b', text):
+            score += 12
+
+    return score
+
+
+
 def fetch_article_filtered(url, fallback):
     try:
         r = requests.get(
@@ -217,28 +272,35 @@ def fetch_article_filtered(url, fallback):
             text = filter_text(fallback)
         text = text[:7000]
 
-        imgs = []
+        candidates = []
+        seen_urls = set()
         og = soup.find('meta', attrs={'property': 'og:image'})
         if og and og.get('content'):
             og_url = urljoin(url, og['content'])
             if not url_is_editorial_or_decorative(og_url):
-                imgs.append(og_url)
+                seen_urls.add(og_url)
+                candidates.append((image_topic_score(url, None, og_url) + 2, 0, og_url))
 
         if root:
+            order = 1
             for im in root.find_all('img'):
                 src = im.get('data-src') or im.get('data-lazy-src') or im.get('src')
                 if not src:
                     continue
                 u = urljoin(url, src)
-                if not u.startswith('http') or u in imgs:
+                if not u.startswith('http') or u in seen_urls:
                     continue
                 if image_is_editorial_or_decorative(im, u):
                     print('Skip editorial/decorative image:', u[:180])
                     continue
-                imgs.append(u)
-                if len(imgs) >= 10:
+                seen_urls.add(u)
+                candidates.append((image_topic_score(url, im, u), -order, u))
+                order += 1
+                if order > 24:
                     break
 
+        candidates.sort(reverse=True)
+        imgs = [u for _score, _order, u in candidates[:10]]
         return text, imgs
     except Exception as e:
         print('Article fetch/filter warning:', e)
