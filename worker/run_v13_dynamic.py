@@ -129,6 +129,8 @@ def _narration_sentence_score(sentence, title_terms, index):
     score = len(words & title_terms) * 6
     if _NARRATION_ACTION.search(s):
         score += 7
+    if v12._COOKING_ACTION.search(s):
+        score += 5
     if re.search(r'\b\d+(?:[.,]\d+)?\b', s):
         score += 2
     if 55 <= len(s) <= 185:
@@ -174,19 +176,28 @@ def build_quality_narration(title, text):
 
     # The first spoken answer should be highly relevant, not merely the first paragraph.
     first_pool = candidates[:min(10, len(candidates))]
-    first_i, _score, first = max(first_pool, key=lambda row: (row[1], -row[0]))
+    domain = _clean(v9._CURRENT_JOB.get('domain', '')).casefold().replace('www.', '')
+
+    if domain == 'wassollichheutekochen.de':
+        # Recipes need a real cooking action in the first seconds, not a generic intro.
+        cooking_first = [row for row in first_pool if v12._COOKING_ACTION.search(row[2])]
+        first_i, _score, first = (cooking_first[0] if cooking_first else first_pool[0])
+    else:
+        first_i, _score, first = max(first_pool, key=lambda row: (row[1], -row[0]))
 
     question = bool(re.match(
         r'^(?:wie|warum|wieso|weshalb|was|welche|welcher|welches|wann|wo|kann|muss|soll|bin)\b',
         title, re.I,
     ))
-    domain = _clean(v9._CURRENT_JOB.get('domain', '')).casefold()
     if domain == 'wassollichheutekochen.de':
-        intro = f'{title.rstrip(".!?")}. Das Wichtigste zuerst: {first}'
+        dish = re.split(r'\s+[–—-]\s+|:\s+', title.rstrip('.!?'), 1)[0].strip()
+        intro = first
+        if dish and dish.casefold() not in first.casefold():
+            intro = f'{first} So gelingt {dish}.'
     elif question:
         intro = f'Die kurze Antwort zuerst: {first}'
     else:
-        intro = f'{title.rstrip(".!?")}. Das Wichtigste zuerst: {first}'
+        intro = f'{first} Genau darum geht es bei {title.rstrip(".!?")}.'
 
     # Select the most useful sentences, then restore their editorial order.
     rest = [row for row in candidates if row[0] != first_i]
