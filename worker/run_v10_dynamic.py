@@ -139,7 +139,7 @@ def core_chunks_v10(text, target=5):
                 picks.append(sentence)
             if len(picks) >= wanted:
                 break
-    return picks[:5]
+    return picks[:wanted]
 
 
 def semantic_heading(statement, idx=1, total=1):
