@@ -109,6 +109,14 @@ def semantic_thumbnail_phrase(title, domain=''):
         if p.strip()
     ]
     if len(parts) > 1:
+        # The first clause usually carries the actual search intent ("E-Auto lädt zu langsam"),
+        # while later clauses are often generic promises ("diese Ursachen solltest du prüfen").
+        first = parts[0]
+        first_words = first.split()
+        if 2 <= len(first_words) <= 9 and not _DANGLING.search(first) and not _GENERIC.match(first):
+            if not re.match(r'^(?:diese|diesen|dieser|darauf|so|dann|jetzt)\b', first, re.I):
+                return first
+
         ranked = sorted(
             enumerate(parts),
             key=lambda item: (-_segment_score(item[1], item[0], len(parts)), item[0]),
