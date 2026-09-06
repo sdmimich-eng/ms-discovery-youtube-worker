@@ -53,6 +53,9 @@ _TTS_REPLACEMENTS = [
     (r'\bNamensfehler\b', 'Namens-Fehler'),
     (r'\bFehlercode\b', 'Fehler-Code'),
     (r'\bAllradantrieb\b', 'Allrad-Antrieb'),
+    (r'\bChorizo\b', 'Tschoriso'),
+    (r'\bRucola\b', 'Rukola'),
+    (r'\bGnocchi\b', 'Njokki'),
 ]
 
 
@@ -230,7 +233,7 @@ def build_narration_capture(title, text):
     global _NARRATION
     narration = build_quality_narration(title, text)
     _NARRATION = narration
-    print('Narration quality:', len(narration), 'chars,', len(re.split(r'(?<=[.!?])\\s+', narration)), 'sentences')
+    print('Narration quality:', len(narration), 'chars,', len(re.split(r'(?<=[.!?])\s+', narration)), 'sentences')
     return narration
 
 
