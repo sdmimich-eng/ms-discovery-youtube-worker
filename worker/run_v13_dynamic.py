@@ -518,12 +518,13 @@ _SEO_STOPWORDS = {
 
 
 def _job_domain(job):
-    domain = _clean(job.get('domain', '')).casefold().replace('www.', '')
-    if domain:
-        return domain
+    # The article URL is authoritative. Old/stale job metadata must never turn a
+    # cooking video into #Auto or put a Windows clip into the wrong category.
     url = _clean(job.get('article_url', ''))
     m = re.match(r'^https?://([^/]+)', url, re.I)
-    return (m.group(1).casefold().replace('www.', '') if m else '')
+    if m:
+        return m.group(1).casefold().replace('www.', '')
+    return _clean(job.get('domain', '')).casefold().replace('www.', '')
 
 
 def _add_unique(target, values, limit=99):
