@@ -17,7 +17,7 @@ def emit(key, value):
             f.write(f'{key}={value}\n')
 
 
-# 5.7.11: Ein Push aktualisiert nur Worker-Code. Er darf keinen echten Media-Job
+# Ein Push aktualisiert nur Worker-Code. Er darf keinen echten Media-Job
 # aus der WordPress-Queue ziehen und damit einen spaeteren Scheduler-Slot blockieren.
 if (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push':
     emit('has_work', 'false')
@@ -31,7 +31,7 @@ if (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push':
 def fetch_json(url, timeout, label):
     req = urllib.request.Request(url, headers={
         'X-MSD-Worker-Secret': secret,
-        'User-Agent': 'MS-Discovery-Media-Worker/1.4',
+        'User-Agent': 'MS-Discovery-Media-Worker/1.5',
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -60,39 +60,39 @@ social_work_url = job_url.replace('/youtube-job', '/social-media-work')
 social_job_url = job_url.replace('/youtube-job', '/social-media-job')
 
 youtube_status = safe_fetch(youtube_work_url, 20, 'YouTube preflight')
-social_status = safe_fetch(social_work_url, 20, 'Social preflight')
-
 youtube_has = bool(isinstance(youtube_status, dict) and youtube_status.get('has_work'))
 youtube_urgent = bool(isinstance(youtube_status, dict) and youtube_status.get('urgent'))
-social_has = bool(isinstance(social_status, dict) and social_status.get('has_work'))
-social_urgent = bool(isinstance(social_status, dict) and social_status.get('urgent'))
 
-# Dringende YouTube-Pflichtvideos bleiben unangetastet. Danach bekommen faellige
-# Stories/Reels einen freien Worker-Slot; erst danach optionales YouTube.
+# YouTube ist der Hauptkanal. Sobald ein YouTube-Job bereitliegt, wird er immer
+# vor Social/Instagram geholt. Damit kann ein leerer oder fehlerhafter Social-
+# Endpunkt niemals mehr einen wartenden YouTube-Job blockieren.
 kind = ''
 claim_url = ''
-if youtube_has and youtube_urgent:
-    kind = 'youtube'
-    claim_url = base_job_url
-elif social_has:
-    kind = 'social'
-    claim_url = social_job_url
-elif youtube_has:
+social_urgent = False
+if youtube_has:
     kind = 'youtube'
     claim_url = base_job_url
 else:
-    emit('has_work', 'false')
-    emit('urgent', 'false')
-    emit('is_youtube', 'false')
-    emit('is_social', 'false')
-    print('Kein Media-Job nötig:', (social_status.get('reason') if isinstance(social_status, dict) else '') or (youtube_status.get('reason') if isinstance(youtube_status, dict) else '') or 'kein freier Slot')
-    sys.exit(0)
+    # Social wird nur geprueft, wenn wirklich kein YouTube-Job wartet.
+    social_status = safe_fetch(social_work_url, 20, 'Social preflight')
+    social_has = bool(isinstance(social_status, dict) and social_status.get('has_work'))
+    social_urgent = bool(isinstance(social_status, dict) and social_status.get('urgent'))
+    if social_has:
+        kind = 'social'
+        claim_url = social_job_url
+    else:
+        emit('has_work', 'false')
+        emit('urgent', 'false')
+        emit('is_youtube', 'false')
+        emit('is_social', 'false')
+        print('Kein Media-Job nötig:', (youtube_status.get('reason') if isinstance(youtube_status, dict) else '') or (social_status.get('reason') if isinstance(social_status, dict) else '') or 'kein freier Slot')
+        sys.exit(0)
 
 try:
     data = fetch_json(claim_url, 65, f'{kind} job endpoint')
 except Exception as e:
-    # 5.7.12: Ein kurzer WordPress-/Netzwerk-Aussetzer ist kein fehlgeschlagener
-    # Media-Job. Der naechste Scheduler-Lauf versucht es erneut; GitHub bleibt gruen.
+    # Ein kurzer WordPress-/Netzwerk-Aussetzer ist kein fehlgeschlagener Media-Job.
+    # Der naechste Scheduler-Lauf versucht es erneut.
     emit('has_work', 'false')
     emit('urgent', 'false')
     emit('is_youtube', 'false')
@@ -123,5 +123,5 @@ else:
     emit('job_kind', 'youtube')
     emit('is_youtube', 'true')
     emit('is_social', 'false')
-    emit('urgent', 'true' if job.get('urgent') else 'false')
+    emit('urgent', 'true' if job.get('urgent') else ('true' if youtube_urgent else 'false'))
     print('YouTube-Job geholt:', 'URGENT' if job.get('urgent') else 'NORMAL', '-', str(job.get('title') or '')[:120])
