@@ -17,9 +17,11 @@ def emit(key, value):
             f.write(f'{key}={value}\n')
 
 
-# Ein Push aktualisiert nur Worker-Code. Er darf keinen echten Media-Job
-# aus der WordPress-Queue ziehen und damit einen spaeteren Scheduler-Slot blockieren.
-if (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push':
+# Normale Code-Pushes ziehen keinen Media-Job. Ein ausdruecklich markierter
+# Fallback-/Recovery-Lauf darf dagegen genau einen faelligen Job beanspruchen.
+is_push = (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push'
+allow_push_claim = (os.environ.get('MSD_ALLOW_PUSH_CLAIM') or '').strip() == '1'
+if is_push and not allow_push_claim:
     emit('has_work', 'false')
     emit('urgent', 'false')
     emit('is_youtube', 'false')
@@ -31,7 +33,7 @@ if (os.environ.get('GITHUB_EVENT_NAME') or '').strip().lower() == 'push':
 def fetch_json(url, timeout, label):
     req = urllib.request.Request(url, headers={
         'X-MSD-Worker-Secret': secret,
-        'User-Agent': 'MS-Discovery-Media-Worker/1.5',
+        'User-Agent': 'MS-Discovery-Media-Worker/1.6',
     })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -63,9 +65,6 @@ youtube_status = safe_fetch(youtube_work_url, 20, 'YouTube preflight')
 youtube_has = bool(isinstance(youtube_status, dict) and youtube_status.get('has_work'))
 youtube_urgent = bool(isinstance(youtube_status, dict) and youtube_status.get('urgent'))
 
-# YouTube ist der Hauptkanal. Sobald ein YouTube-Job bereitliegt, wird er immer
-# vor Social/Instagram geholt. Damit kann ein leerer oder fehlerhafter Social-
-# Endpunkt niemals mehr einen wartenden YouTube-Job blockieren.
 kind = ''
 claim_url = ''
 social_urgent = False
@@ -73,7 +72,6 @@ if youtube_has:
     kind = 'youtube'
     claim_url = base_job_url
 else:
-    # Social wird nur geprueft, wenn wirklich kein YouTube-Job wartet.
     social_status = safe_fetch(social_work_url, 20, 'Social preflight')
     social_has = bool(isinstance(social_status, dict) and social_status.get('has_work'))
     social_urgent = bool(isinstance(social_status, dict) and social_status.get('urgent'))
@@ -91,8 +89,6 @@ else:
 try:
     data = fetch_json(claim_url, 65, f'{kind} job endpoint')
 except Exception as e:
-    # Ein kurzer WordPress-/Netzwerk-Aussetzer ist kein fehlgeschlagener Media-Job.
-    # Der naechste Scheduler-Lauf versucht es erneut.
     emit('has_work', 'false')
     emit('urgent', 'false')
     emit('is_youtube', 'false')
