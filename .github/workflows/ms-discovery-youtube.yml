@@ -7,9 +7,10 @@ on:
       - 'worker/**'
       - '.github/workflows/ms-discovery-youtube.yml'
   schedule:
-    # Weiter vier Checks pro Stunde, aber bewusst versetzt zum WP-Hauptslot (:05)
-    # und zum Pinterest-Wakeup (:17), damit die Systeme nicht gleichzeitig anlaufen.
-    - cron: '7,22,37,52 * * * *'
+    # Einfacher 15-Minuten-Takt. Der Worker fragt nur leicht den Queue-Status ab
+    # und rendert nur, wenn Discovery wirklich einen faelligen Job bereitstellt.
+    # Dadurch bleibt das Tageslimit 3-4 Videos in Discovery massgeblich.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
