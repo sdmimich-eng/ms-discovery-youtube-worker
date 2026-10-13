@@ -621,7 +621,10 @@ def build_youtube_description(job):
     hashtags = build_youtube_hashtags(job)
     if hashtags:
         description = (description + '\n\n' + ' '.join(hashtags)).strip()
-    return description[:5000]
+    # YouTube enforces the 5,000-byte UTF-8 limit, not 5,000 Python characters.
+    # Remove control/format characters that can make otherwise valid metadata fail.
+    description = ''.join(ch for ch in description if ch in '\\n\\t' or (ord(ch) >= 32 and not (0x7f <= ord(ch) <= 0x9f) and not (0xd800 <= ord(ch) <= 0xdfff)))
+    return description.encode('utf-8')[:4900].decode('utf-8', errors='ignore').strip()
 
 
 def upload_youtube_v13(video, job):
@@ -666,6 +669,23 @@ def upload_youtube_v13(video, job):
         data=json.dumps(meta, ensure_ascii=False).encode('utf-8'),
         timeout=30,
     )
+    if r.status_code == 400 and 'invalidDescription' in r.text:
+        # A bad article description must never block the entire rendered video.
+        # Retry initialization once with a minimal, known-safe description.
+        print('YouTube rejected description; retrying with safe metadata.')
+        fallback = 'MS Ratgeber: ' + snippet['title'] + '\\n\\nMehr Tipps und Anleitungen auf https://www.ms-programs.de/'
+        meta['snippet']['description'] = fallback.encode('utf-8')[:1000].decode('utf-8', 'ignore')
+        r = worker.requests.post(
+            url,
+            headers={
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json; charset=UTF-8',
+                'X-Upload-Content-Type': 'video/mp4',
+                'X-Upload-Content-Length': str(size),
+            },
+            data=json.dumps(meta, ensure_ascii=False).encode('utf-8'),
+            timeout=30,
+        )
     if r.status_code not in (200, 201):
         raise RuntimeError('YouTube init HTTP %s: %s' % (r.status_code, r.text[:600]))
     loc = r.headers.get('Location')
