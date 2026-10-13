@@ -623,7 +623,7 @@ def build_youtube_description(job):
         description = (description + '\n\n' + ' '.join(hashtags)).strip()
     # YouTube enforces the 5,000-byte UTF-8 limit, not 5,000 Python characters.
     # Remove control/format characters that can make otherwise valid metadata fail.
-    description = ''.join(ch for ch in description if ch in '\\n\\t' or (ord(ch) >= 32 and not (0x7f <= ord(ch) <= 0x9f) and not (0xd800 <= ord(ch) <= 0xdfff)))
+    description = ''.join(ch for ch in description if ch in '\n\t' or (ord(ch) >= 32 and not (0x7f <= ord(ch) <= 0x9f) and not (0xd800 <= ord(ch) <= 0xdfff)))
     return description.encode('utf-8')[:4900].decode('utf-8', errors='ignore').strip()
 
 
@@ -673,7 +673,7 @@ def upload_youtube_v13(video, job):
         # A bad article description must never block the entire rendered video.
         # Retry initialization once with a minimal, known-safe description.
         print('YouTube rejected description; retrying with safe metadata.')
-        fallback = 'MS Ratgeber: ' + snippet['title'] + '\\n\\nMehr Tipps und Anleitungen auf https://www.ms-programs.de/'
+        fallback = 'MS Ratgeber: ' + snippet['title'] + '\n\nMehr Tipps und Anleitungen auf https://www.ms-programs.de/'
         meta['snippet']['description'] = fallback.encode('utf-8')[:1000].decode('utf-8', 'ignore')
         r = worker.requests.post(
             url,
