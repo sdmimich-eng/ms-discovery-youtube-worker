@@ -208,7 +208,7 @@ def build_quality_narration(title, text):
     ranked = sorted(rest, key=lambda row: (-row[1], row[0]))
     selected = []
     chars = len(intro)
-    # Around 2.4-2.9 minutes with the clearer V13 voice instead of rigid ~3:20 videos.
+    # Aim for a concise answer-first video; keep the duration content-dependent.
     budget = 1100
     for row in ranked:
         sentence = row[2]
@@ -221,7 +221,7 @@ def build_quality_narration(title, text):
     selected.sort(key=lambda row: row[0])
 
     body_sentences = [row[2] for row in selected]
-    outro = 'Die vollständige Schritt-für-Schritt-Anleitung findest du direkt über den ersten Link in der Videobeschreibung.'
+    outro = 'Für weitere konkrete Lösungen abonniere MS Ratgeber. Die vollständige Anleitung steht im ersten Link der Beschreibung.'
     narration = polish_narration(' '.join([intro] + body_sentences + [outro]))
 
     # Final hard gate: a script should have enough substance but no obvious malformed punctuation.
@@ -736,7 +736,9 @@ def _short_visual_statement(points):
     words = raw.split()
     if len(words) > 11:
         raw = ' '.join(words[:11]).rstrip(' ,;:') + '…'
-    return raw[:105]
+    if len(raw) > 105:
+        raw = raw[:101].rsplit(' ', 1)[0].rstrip(' ,;:') + '…'
+    return raw
 
 
 def quality_content_overlay(title, heading, pts, domain, idx, total, out, compact=False):
@@ -765,13 +767,58 @@ def quality_content_overlay(title, heading, pts, domain, idx, total, out, compac
 def quality_thumbnail(bg_path, title, domain, out):
     """At most five words, rendered as large lettering on a strong blue panel."""
     from PIL import Image, ImageDraw
-    im = v5.Image.open(bg_path).convert('RGB').resize((1280, 720)) if bg_path else Image.new('RGB', (1280, 720), (20, 34, 53))
+    if bg_path and Path(bg_path).exists():
+        original = Image.open(bg_path).convert('RGB')
+        ratio = max(1280 / original.width, 720 / original.height)
+        scaled = original.resize((round(original.width * ratio), round(original.height * ratio)), Image.Resampling.LANCZOS)
+        left = (scaled.width - 1280) // 2
+        top = (scaled.height - 720) // 2
+        im = scaled.crop((left, top, left + 1280, top + 720))
+    else:
+        im = Image.new('RGB', (1280, 720), (20, 34, 53))
     shade = Image.new('RGBA', im.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(shade, 'RGBA')
     d.rounded_rectangle((35, 310, 1245, 690), radius=25, fill=(4, 32, 83, 242))
     phrase = v11.semantic_thumbnail_phrase(title, domain) if 'v11' in globals() else title
     words = _clean(phrase or title).split()
     phrase = ' '.join(words[:5]).rstrip(' ,;:')
+    # Avoid awkward unfinished promises such as 'Wie übertakte ich meinen'.
+    if len(words) > 5 and re.search(r'\\b(?:mein|meine|meinen|mit|und|oder|für|auf|bei|der|die|das|den|dem|des|zu|zum|zur)
+    font, lines = v5.fit_text(d, phrase, 1120, 2, 96, 62, 2, True)
+    y = 360
+    for line in lines:
+        d.text((82, y), line, font=font, fill=(255, 255, 255, 255),
+               stroke_width=2, stroke_fill=(0, 0, 0, 255))
+        y += int(font.size * 1.16)
+    im = Image.alpha_composite(im.convert('RGBA'), shade).convert('RGB')
+    im.save(out, quality=95, subsampling=0)
+
+
+def install_v13():
+    global _ORIGINAL_BUILD, _ORIGINAL_COMPLETE, _ORIGINAL_SYNTH
+    v12.install_v12()
+    v5.make_content_overlay = quality_content_overlay
+    v5.make_thumbnail = quality_thumbnail
+    _ORIGINAL_BUILD = v5.build_narration
+    _ORIGINAL_COMPLETE = worker.complete
+    _ORIGINAL_SYNTH = worker.synthesize_voice
+    v5.build_narration = build_narration_capture
+    worker.synthesize_voice = synthesize_voice_quality
+    v6.upload_youtube_v6 = upload_youtube_v13
+    worker.complete = complete_v13
+
+
+def main():
+    install_v13()
+    return v6.main()
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
+, phrase, re.I):
+        phrase = ' '.join(words[:4]).rstrip(' ,;:')
+    if not phrase:
+        phrase = 'Kurz erklärt'
     font, lines = v5.fit_text(d, phrase, 1120, 2, 96, 62, 2, True)
     y = 360
     for line in lines:
