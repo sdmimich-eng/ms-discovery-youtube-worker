@@ -11,6 +11,7 @@ import run_v5_dynamic as v5
 import run_v6_dynamic as v6
 import run_v9_dynamic as v9
 import run_v12_dynamic as v12
+import run_v11_dynamic as v11
 
 _NARRATION = ''
 _ORIGINAL_BUILD = None
@@ -208,14 +209,14 @@ def build_quality_narration(title, text):
     selected = []
     chars = len(intro)
     # Around 2.4-2.9 minutes with the clearer V13 voice instead of rigid ~3:20 videos.
-    budget = 2450
+    budget = 1100
     for row in ranked:
         sentence = row[2]
         if chars + len(sentence) + 1 > budget:
             continue
         selected.append(row)
         chars += len(sentence) + 1
-        if len(selected) >= 11:
+        if len(selected) >= 6:
             break
     selected.sort(key=lambda row: row[0])
 
@@ -224,7 +225,7 @@ def build_quality_narration(title, text):
     narration = polish_narration(' '.join([intro] + body_sentences + [outro]))
 
     # Final hard gate: a script should have enough substance but no obvious malformed punctuation.
-    if len(narration) < 420 or re.search(r'\s[,.;:!?]', narration):
+    if len(narration) < 240 or re.search(r'\s[,.;:!?]', narration):
         narration = polish_narration(_ORIGINAL_BUILD(title, text))
     return narration
 
@@ -727,9 +728,65 @@ def complete_v13(url, job_id, ok, **extra):
     return _ORIGINAL_COMPLETE(url, job_id, ok, **extra)
 
 
+
+def _short_visual_statement(points):
+    """Show a single readable action; narration carries the details."""
+    raw = v12._card_statement(points, '').strip()
+    raw = re.sub(r'\\s+', ' ', raw).strip(' .;:')
+    words = raw.split()
+    if len(words) > 11:
+        raw = ' '.join(words[:11]).rstrip(' ,;:') + '…'
+    return raw[:105]
+
+
+def quality_content_overlay(title, heading, pts, domain, idx, total, out, compact=False):
+    """Large, high-contrast text for mobile playback; never a paragraph."""
+    if compact:
+        return v12.safe_minimal_overlay('', domain, idx, total, out, idx)
+    from PIL import Image, ImageDraw
+    im = Image.new('RGBA', (1920, 1080), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im, 'RGBA')
+    box = (105, 140, 1815, 650)
+    v12._blue_gradient_panel(im, box, radius=38, alpha=240)
+    d.rounded_rectangle((105, 140, 124, 650), radius=8, fill=(42, 207, 246, 255))
+    category = v5.category_label(domain)
+    d.text((185, 188), category, font=v5.font(35, True), fill=(105, 229, 255, 255))
+    statement = _short_visual_statement(pts) or _clean(heading)
+    fnt, lines = v5.fit_text(d, statement, 1490, 3, 92, 58, 2, True)
+    line_height = int(fnt.size * 1.23)
+    y = 360 - (len(lines) * line_height) // 2
+    for line in lines:
+        d.text((185, y), line, font=fnt, fill=(255, 255, 255, 255),
+               stroke_width=2, stroke_fill=(0, 0, 0, 255))
+        y += line_height
+    im.save(out)
+
+
+def quality_thumbnail(bg_path, title, domain, out):
+    """At most five words, rendered as large lettering on a strong blue panel."""
+    from PIL import Image, ImageDraw
+    im = v5.Image.open(bg_path).convert('RGB').resize((1280, 720)) if bg_path else Image.new('RGB', (1280, 720), (20, 34, 53))
+    shade = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(shade, 'RGBA')
+    d.rounded_rectangle((35, 310, 1245, 690), radius=25, fill=(4, 32, 83, 242))
+    phrase = v11.semantic_thumbnail_phrase(title, domain) if 'v11' in globals() else title
+    words = _clean(phrase or title).split()
+    phrase = ' '.join(words[:5]).rstrip(' ,;:')
+    font, lines = v5.fit_text(d, phrase, 1120, 2, 96, 62, 2, True)
+    y = 360
+    for line in lines:
+        d.text((82, y), line, font=font, fill=(255, 255, 255, 255),
+               stroke_width=2, stroke_fill=(0, 0, 0, 255))
+        y += int(font.size * 1.16)
+    im = Image.alpha_composite(im.convert('RGBA'), shade).convert('RGB')
+    im.save(out, quality=95, subsampling=0)
+
+
 def install_v13():
     global _ORIGINAL_BUILD, _ORIGINAL_COMPLETE, _ORIGINAL_SYNTH
     v12.install_v12()
+    v5.make_content_overlay = quality_content_overlay
+    v5.make_thumbnail = quality_thumbnail
     _ORIGINAL_BUILD = v5.build_narration
     _ORIGINAL_COMPLETE = worker.complete
     _ORIGINAL_SYNTH = worker.synthesize_voice
