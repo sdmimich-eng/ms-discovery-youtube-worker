@@ -562,27 +562,29 @@ def _significant_title_tokens(title, limit=4):
 
 
 def build_youtube_hashtags(job):
-    """8-12 relevant visible hashtags; topic-specific first, never a generic hashtag dump."""
+    """Use a few precise hashtags instead of an unrelated 12-tag cloud."""
     title = _clean(job.get('title', ''))
-    description = _clean(job.get('description', ''))
-    haystack = f'{title} {description}'.casefold()
     domain = _job_domain(job)
     tags = []
 
+    # The title defines the actual video topic. Avoid matching unrelated words
+    # in a long article description (e.g. 'Motor' in a cooking video).
     for pattern, hashtags, _search_tags in _SEO_TOPIC_RULES:
-        if re.search(pattern, haystack, re.I):
-            _add_unique(tags, hashtags, 12)
+        if re.search(pattern, title, re.I):
+            _add_unique(tags, hashtags[:2], 4)
+            break
 
-    _add_unique(tags, _significant_title_tokens(title, 3), 12)
-    _add_unique(tags, _SEO_DOMAIN_HASHTAGS.get(domain, []), 12)
-    _add_unique(tags, ['Ratgeber', 'Tipps', 'MSRatgeber'], 12)
+    if not tags:
+        _add_unique(tags, _SEO_DOMAIN_HASHTAGS.get(domain, [])[:2], 4)
+    _add_unique(tags, _significant_title_tokens(title, 2), 4)
+    _add_unique(tags, ['MSRatgeber'], 5)
 
     cleaned = []
     for tag in tags:
         token = re.sub(r'[^A-Za-zÄÖÜäöüß0-9_]', '', tag)
         if len(token) >= 2:
             cleaned.append('#' + token[:40])
-    return cleaned[:12]
+    return cleaned[:5]
 
 
 def build_youtube_search_tags(job):
