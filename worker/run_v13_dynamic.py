@@ -743,20 +743,18 @@ def _short_visual_statement(points):
 
 def quality_content_overlay(title, heading, pts, domain, idx, total, out, compact=False):
     """Large, high-contrast text for mobile playback; never a paragraph."""
-    if compact:
-        return v12.safe_minimal_overlay('', domain, idx, total, out, idx)
     from PIL import Image, ImageDraw
     im = Image.new('RGBA', (1920, 1080), (0, 0, 0, 0))
     d = ImageDraw.Draw(im, 'RGBA')
-    box = (105, 140, 1815, 650)
+    box = (105, 140, 1815, 650) if not compact else (105, 140, 1815, 540)
     v12._blue_gradient_panel(im, box, radius=38, alpha=240)
-    d.rounded_rectangle((105, 140, 124, 650), radius=8, fill=(42, 207, 246, 255))
+    d.rounded_rectangle((105, 140, 124, box[3]), radius=8, fill=(42, 207, 246, 255))
     category = v5.category_label(domain)
     d.text((185, 188), category, font=v5.font(35, True), fill=(105, 229, 255, 255))
     statement = _short_visual_statement(pts) or _clean(heading)
     fnt, lines = v5.fit_text(d, statement, 1490, 3, 92, 58, 2, True)
     line_height = int(fnt.size * 1.23)
-    y = 360 - (len(lines) * line_height) // 2
+    y = (box[1] + box[3]) // 2 - (len(lines) * line_height) // 2
     for line in lines:
         d.text((185, y), line, font=fnt, fill=(255, 255, 255, 255),
                stroke_width=2, stroke_fill=(0, 0, 0, 255))
