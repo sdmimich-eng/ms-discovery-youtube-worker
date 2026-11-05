@@ -782,8 +782,14 @@ def quality_thumbnail(bg_path, title, domain, out):
     phrase = v11.semantic_thumbnail_phrase(title, domain) if 'v11' in globals() else title
     words = _clean(phrase or title).split()
     phrase = ' '.join(words[:5]).rstrip(' ,;:')
-    # Avoid awkward unfinished promises such as 'Wie übertakte ich meinen'.
-    if len(words) > 5 and re.search(r'\\b(?:mein|meine|meinen|mit|und|oder|für|auf|bei|der|die|das|den|dem|des|zu|zum|zur)
+    # Keep thumbnail phrases short without leaving a dangling article.
+    if len(words) > 5 and phrase.split()[-1].casefold() in {
+        'mein', 'meine', 'meinen', 'mit', 'und', 'oder', 'für',
+        'auf', 'bei', 'der', 'die', 'das', 'den', 'dem', 'des', 'zu', 'zum', 'zur'
+    }:
+        phrase = ' '.join(words[:4]).rstrip(' ,;:')
+    if not phrase:
+        phrase = 'Kurz erklärt'
     font, lines = v5.fit_text(d, phrase, 1120, 2, 96, 62, 2, True)
     y = 360
     for line in lines:
