@@ -732,7 +732,7 @@ def complete_v13(url, job_id, ok, **extra):
 def _short_visual_statement(points):
     """Show a single readable action; narration carries the details."""
     raw = v12._card_statement(points, '').strip()
-    raw = re.sub(r'\\s+', ' ', raw).strip(' .;:')
+    raw = re.sub(r'\s+', ' ', raw).strip(' .;:')
     words = raw.split()
     if len(words) > 11:
         raw = ' '.join(words[:11]).rstrip(' ,;:') + '…'
