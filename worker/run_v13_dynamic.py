@@ -821,38 +821,3 @@ def main():
 
 if __name__ == '__main__':
     raise SystemExit(main())
-, phrase, re.I):
-        phrase = ' '.join(words[:4]).rstrip(' ,;:')
-    if not phrase:
-        phrase = 'Kurz erklärt'
-    font, lines = v5.fit_text(d, phrase, 1120, 2, 96, 62, 2, True)
-    y = 360
-    for line in lines:
-        d.text((82, y), line, font=font, fill=(255, 255, 255, 255),
-               stroke_width=2, stroke_fill=(0, 0, 0, 255))
-        y += int(font.size * 1.16)
-    im = Image.alpha_composite(im.convert('RGBA'), shade).convert('RGB')
-    im.save(out, quality=95, subsampling=0)
-
-
-def install_v13():
-    global _ORIGINAL_BUILD, _ORIGINAL_COMPLETE, _ORIGINAL_SYNTH
-    v12.install_v12()
-    v5.make_content_overlay = quality_content_overlay
-    v5.make_thumbnail = quality_thumbnail
-    _ORIGINAL_BUILD = v5.build_narration
-    _ORIGINAL_COMPLETE = worker.complete
-    _ORIGINAL_SYNTH = worker.synthesize_voice
-    v5.build_narration = build_narration_capture
-    worker.synthesize_voice = synthesize_voice_quality
-    v6.upload_youtube_v6 = upload_youtube_v13
-    worker.complete = complete_v13
-
-
-def main():
-    install_v13()
-    return v6.main()
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())
