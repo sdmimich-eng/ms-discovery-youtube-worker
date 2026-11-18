@@ -249,7 +249,7 @@ def speech_pronunciation_text(text):
     return t
 
 
-def quality_tts_chunks(text, max_chars=420):
+def quality_tts_chunks(text, max_chars=260):
     """Short sentence groups reduce Piper slurring words together."""
     sentences = [
         _clean(x)
@@ -282,9 +282,9 @@ def synthesize_voice_quality(text, out_wav, td):
         # A touch slower and less noisy than the old profile. This makes long
         # German compounds and technical terms noticeably easier to understand.
         syn = SynthesisConfig(
-            length_scale=1.10,
-            noise_scale=0.54,
-            noise_w_scale=0.70,
+            length_scale=1.17,
+            noise_scale=0.46,
+            noise_w_scale=0.62,
             normalize_audio=True,
         )
         parts = []
@@ -306,7 +306,7 @@ def synthesize_voice_quality(text, out_wav, td):
                 wf.setnchannels(channels)
                 wf.setsampwidth(width)
                 wf.setframerate(rate)
-                silence_frames = int(rate * 0.16)
+                silence_frames = int(rate * 0.24)
                 wf.writeframes(b'\x00' * silence_frames * channels * width)
 
             listing = Path(td) / 'voice_quality_concat.txt'
@@ -730,15 +730,26 @@ def complete_v13(url, job_id, ok, **extra):
 
 
 def _short_visual_statement(points):
-    """Show a single readable action; narration carries the details."""
+    """Prefer a complete, useful sentence; never display clipped prose."""
     raw = v12._card_statement(points, '').strip()
-    raw = re.sub(r'\s+', ' ', raw).strip(' .;:')
-    words = raw.split()
-    if len(words) > 11:
-        raw = ' '.join(words[:11]).rstrip(' ,;:') + '…'
-    if len(raw) > 105:
-        raw = raw[:101].rsplit(' ', 1)[0].rstrip(' ,;:') + '…'
-    return raw
+    raw = re.sub(r'\\s+', ' ', raw).strip(' .;:…')
+    raw = re.sub(r'\\s*(?:\\.{3}|…)+$', '', raw).strip()
+    if not raw:
+        return 'Das solltest du prüfen'
+    # Remove introductory filler while keeping the actionable instruction.
+    raw = re.sub(r'^(?:lies insbesondere nach, ob|achte insbesondere darauf, dass|wichtig ist dabei, dass)\\s+', '', raw, flags=re.I)
+    # Use the first complete clause when the original is too long.
+    clauses = re.split(r'(?<=[.!?;])\\s+|\\s+[–—]\\s+', raw)
+    for clause in clauses:
+        clause = clause.strip(' .;:…')
+        if 12 <= len(clause) <= 105 and len(clause.split()) <= 13:
+            return clause[0].upper() + clause[1:]
+    # A long sentence is not safe to cut mid-thought. Use a concise
+    # truthful topic cue instead of an invented or incomplete instruction.
+    topic = re.split(r'[:;,.!?]', raw, 1)[0].strip()
+    if 12 <= len(topic) <= 95 and len(topic.split()) <= 12:
+        return topic[0].upper() + topic[1:]
+    return 'Die wichtigsten Schritte im Überblick'
 
 
 def quality_content_overlay(title, heading, pts, domain, idx, total, out, compact=False):
